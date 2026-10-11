@@ -1,0 +1,211 @@
+/* a380/a380.css (S): page tokens and the scaffold's classes. Light values first, dark overrides after.
+   Modules add their own CSS with ctx.css(text) (appended after this file, marked by module). */
+.iso{
+  --a3-pave:#ecece8;--a3-paint:#ffffff;--a3-paint-yellow:#d9b13b;--a3-lubber:#8a8a8f;
+  --a3-shadow:#20201c;--a3-red:#d8352c;--a3-green:#1f9a5b;--a3-white:#9aa0aa;
+  --a3-chip:#e8e8e5;--a3-chip-text:#3a3a3e;
+  --a3-red-core:#f7d0cb;--a3-green-core:#cdebdb;--a3-white-rim:#8c949e;
+}
+.iso[data-theme="dark"]{
+  --a3-pave:#1e1e1e;--a3-paint:#4a4a4a;--a3-paint-yellow:#6d5a22;--a3-lubber:#6a6a6a;
+  --a3-shadow:#000000;--a3-red:#ff5a4e;--a3-green:#5ee69a;--a3-white:#f2efe8;
+  --a3-chip:#1d1d1d;--a3-chip-text:#cfcfcf;
+}
+.a3-stage{outline:none;cursor:grab;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+.a3-stage:active{cursor:grabbing}
+.a3-stage.a3-zoomed{overflow:hidden}
+.a3-stage:focus-visible{box-shadow:0 0 0 1px color-mix(in srgb,var(--anatomy-mid) 45%,transparent);border-radius:3px}
+.a3-sizer{display:block;width:100%;height:auto;visibility:hidden}
+.a3-gl{pointer-events:none}
+.iso[data-theme="dark"] .a3-gl{mix-blend-mode:screen}
+.a3-sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+/* the deck: pavement and paint on the platter */
+.a3-pave{fill:var(--a3-pave);stroke:none}
+.a3-mark{fill:var(--a3-paint);stroke:none}
+.a3-lubber{fill:var(--a3-lubber);stroke:none}
+/* SVG fallbacks for point lights (opacity written per frame through vary) */
+.a3-l-lens,.a3-l-halo{stroke:none}
+.a3-l-lens[data-color="red"]{fill:var(--a3-red)}
+.a3-l-lens[data-color="green"]{fill:var(--a3-green)}
+.a3-l-lens[data-color="white"]{fill:var(--a3-white)}
+.a3-l-halo{fill-opacity:.18}
+.a3-l-halo[data-color="red"]{fill:var(--a3-red)}
+.a3-l-halo[data-color="green"]{fill:var(--a3-green)}
+.a3-l-halo[data-color="white"]{fill:var(--a3-white)}
+/* daylight (review round 3; webgl.md 8.3, no halos in air): no halo disc, a saturated body with a thin dark rim and a
+   pale core */
+.iso[data-theme="light"] .a3-l-halo{fill-opacity:0}
+.iso[data-theme="light"] .a3-l-lens{stroke:var(--a3-lens-rim);stroke-width:.3}
+.iso{--a3-lens-rim:#3a3a3e}
+/* the lens core: pale over the saturated body (the daylight rule's glint); white lights take the neutral rule, a pale
+   core in a cool grey rim */
+.iso{--a3-lens-core:#ffffff}
+.a3-l-core{stroke:none;fill:var(--a3-lens-core)}
+.iso[data-theme="light"] .a3-l-core[data-color="red"]{fill:var(--a3-red-core)}
+.iso[data-theme="light"] .a3-l-core[data-color="green"]{fill:var(--a3-green-core)}
+.iso[data-theme="light"] .a3-l-lens[data-color="white"]{fill:var(--a3-white-rim)}
+/* accent planes: lit edge rules, faded by vary (every element: circles and rects too, M4 R4) */
+.a3-acc *{stroke:var(--anatomy-lit);fill:none}
+/* the hovered or tapped part on the SVG page (the canvas page names it in the readout) */
+.a3-hover>path{stroke:var(--anatomy-lit)}
+/* the card corners: the hint follows the pointer kind, and a narrow plate (no key chips) uses the touch wording */
+.a3-hint-coarse{display:none}
+@media (pointer:coarse){.a3-hint-fine{display:none}.a3-hint-coarse{display:inline}}
+.a3-compact .a3-hint-fine{display:none}
+.a3-compact .a3-hint-coarse{display:inline}
+/* a part's label in the readout corner: the hint makes room, and the corner never runs past the plate */
+.iso-plate.a3-labelled [data-corner="hint"]{visibility:hidden}
+.iso-plate:has(.a3-stage) [data-corner="readout"]{max-width:100%;overflow:hidden;text-overflow:ellipsis;padding-bottom:.3em;margin-bottom:-.3em}
+/* fu/r2-interaction: the clip box reaches below the baseline (the kit corner's line-height 1 cut every g, p and y: "qear"),
+   the text stays on the hint's baseline. The narrow layout follows the container (.a3-compact), not only the viewport:
+   at a wide viewport a 390 px figure printed the readout over the hint */
+.a3-compact .iso-plate:has(.a3-stage),.iso-plate.a3-compact:has(.a3-stage){padding-bottom:70px}
+.a3-compact .iso-plate-corner[data-corner="hint"],.iso-plate.a3-compact .iso-plate-corner[data-corner="hint"]{bottom:18px}
+.a3-compact .iso-plate:has(.a3-stage),.iso-plate.a3-compact:has(.a3-stage){overflow:hidden}
+.a3-compact .a3-stage{width:115%;margin:-3% -7.5% -2%}
+/* fu/r2-interaction end */
+/* the canvas page's selection: the picked part's hull in the lit accent */
+.a3-hover-layer{z-index:1}
+.a3-hover-hull{fill:var(--anatomy-lit);fill-opacity:.08;stroke:var(--anatomy-lit);stroke-width:1.25;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+/* fu/r2-interaction: where a part painted later covers the hovered one, its outline is dashed and faint (the kit's
+   hidden-edge convention), not drawn over the parts in front; live.js scales both strokes by 1/zoom */
+.a3-hover-hidden{fill:none;stroke:var(--anatomy-lit);stroke-opacity:.5;stroke-width:1;stroke-dasharray:3 2.5;stroke-linejoin:round;vector-effect:non-scaling-stroke}
+/* the legend: three rows of real buttons with key chips */
+.a3-figcaption{gap:14px}
+.a3-legend{display:grid;gap:8px}
+.a3-row{display:flex;flex-wrap:wrap;gap:6px 6px;align-items:center}
+.a3-row-name{width:64px;flex:none;color:var(--anatomy-muted);font-family:var(--anatomy-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase}
+.a3-btn{display:inline-flex;align-items:center;gap:6px;padding:4px 9px 4px 5px;border:0;border-radius:4px;background:transparent;color:var(--anatomy-text);font:inherit;font-size:12.5px;line-height:1.3;cursor:pointer;box-shadow:inset 0 0 0 1px var(--anatomy-faint)}
+.a3-btn[hidden]{display:none}
+.a3-btn:hover{color:var(--anatomy-strong);box-shadow:inset 0 0 0 1px var(--anatomy-lo)}
+.a3-btn:focus-visible{outline:none;box-shadow:inset 0 0 0 1px var(--anatomy-mid),0 0 0 2px color-mix(in srgb,var(--anatomy-mid) 40%,transparent)}
+.a3-btn[aria-pressed="true"],.a3-btn[aria-current="step"]{color:var(--anatomy-strong);box-shadow:inset 0 0 0 1px var(--anatomy-mid);background:color-mix(in srgb,var(--anatomy-mid) 12%,transparent)}
+/* fu/r2-interaction: the focus ring on a pressed or current button too (the rule above, later and as specific, removed it) */
+.a3-btn[aria-pressed="true"]:focus-visible,.a3-btn[aria-current="step"]:focus-visible{box-shadow:inset 0 0 0 1px var(--anatomy-mid),0 0 0 2px color-mix(in srgb,var(--anatomy-mid) 40%,transparent)}
+.a3-btn[aria-disabled="true"]{opacity:.55;cursor:not-allowed}
+.a3-chip{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 4px;border-radius:3px;background:var(--a3-chip);color:var(--a3-chip-text);font-family:var(--anatomy-mono);font-size:10.5px;line-height:1;box-shadow:inset 0 -1px 0 color-mix(in srgb,var(--anatomy-mid) 40%,transparent)}
+.a3-state{color:var(--anatomy-muted);font-family:var(--anatomy-mono);font-size:10.5px}
+/* follow-up review 1: every state chip keeps one width whatever it says, so no button moves under the pointer when a
+   neighbour's state changes (the light switches' positions, the flaps lever and CONF, the Inspect view) */
+.a3-btn[data-action="light:strobe"] .a3-state,.a3-btn[data-action="light:logo"] .a3-state,.a3-btn[data-action="light:takeoff"] .a3-state{display:inline-block;min-width:4ch}
+.a3-btn[data-action="flaps"] .a3-state{display:inline-block;min-width:16ch}
+.a3-btn[data-action="inspect"][aria-pressed="true"] .a3-state{display:inline-block;min-width:10ch}
+/* a switch a rule holds dark: the reason is on the tip line and in the aria-description */
+.a3-btn.a3-held .a3-state{text-decoration:underline dotted;text-underline-offset:2px}
+.a3-tip{min-height:1.5em;margin:2px 0 0;color:var(--anatomy-muted);font-size:12.5px}
+.a3-caption{color:var(--anatomy-muted)}
+@media (max-width:600px){
+  .a3-row-name{width:100%}
+  .a3-btn{font-size:12px}
+  /* the stage at 115% inside the card on phones (craft.md §6): the plinth's margin is cropped, never the aircraft */
+  .iso-plate:has(.a3-stage){overflow:hidden}
+  .a3-stage{width:115%;margin:-3% -7.5% -2%}
+}
+/* touch and narrow plates: 44 px targets, and no key chips (there is no keyboard to press them on) */
+@media (pointer:coarse){.a3-btn{min-height:44px;padding:6px 12px}.a3-chip{display:none}}
+.a3-compact .a3-btn{min-height:44px;padding:6px 12px}
+.a3-compact .a3-chip{display:none}
+/* light theme: the subject is painted white skin, so its steel ramp is light and close (craft.md §7: shade faces a
+   few percent from the lit ones; the kit's light steel spans 149-232 and made the shade-side fin a dark slab) */
+.iso[data-theme="light"] .a3-stage [data-mat="steel"]{--anatomy-top:#eceef0;--anatomy-shade-3:#e2e5e7;--anatomy-shade-2:#d7dadd;--anatomy-shade-1:#cdd1d4;--anatomy-shade-0:#c2c7cb;--anatomy-paper:#d7dadd;--anatomy-face:#e2e5e7;--anatomy-lit-top:#f3f4f5;--anatomy-lit-shade:#dfe2e4}
+/* the cabin and flight-deck cavities (craft.md §7: their own token set, never a black box). Light: a mid warm-grey
+   set per material, so seats and consoles keep all four shades; dark inherits the figure's tokens */
+.iso[data-theme="light"] .a3-stage :is([data-name^="cabin."],[data-name^="cockpit."])[data-mat]{--anatomy-paper:#b4ada3;--anatomy-face:#bdb6ac;--anatomy-top:#cbc5bb;--anatomy-shade-3:#bfb8ae;--anatomy-shade-2:#b2aba1;--anatomy-shade-1:#a59e94;--anatomy-shade-0:#989187;--anatomy-lit-top:#d6d0c6;--anatomy-lit-shade:#c2bbb1;--anatomy-hi:#3b3732;--anatomy-mid:#6c665e;--anatomy-lo:#857f76;--anatomy-faint:#9d978d}
+.iso[data-theme="light"] .a3-stage :is([data-name^="cabin."],[data-name^="cockpit."])[data-mat="rubber"]{--anatomy-paper:#8a8279;--anatomy-face:#928a80;--anatomy-top:#9e968b;--anatomy-shade-3:#958d83;--anatomy-shade-2:#8a8379;--anatomy-shade-1:#7f786f;--anatomy-shade-0:#746d65;--anatomy-lit-top:#aaa297;--anatomy-lit-shade:#968e84;--anatomy-hi:#2f2b27;--anatomy-mid:#5a544d;--anatomy-lo:#6c665f;--anatomy-faint:#7d776f}
+/* dark: the cavities in warm dark greys (the kit's dark tokens made the carpet and the seat pans read as black holes):
+   the carpet and upholstery (rubber) a warm mid-dark grey, shells and monuments (steel) lighter */
+.iso[data-theme="dark"] .a3-stage :is([data-name^="cabin."],[data-name^="cockpit."])[data-mat="rubber"]{--anatomy-paper:#3b3631;--anatomy-face:#413b35;--anatomy-top:#4b443d;--anatomy-shade-3:#433d37;--anatomy-shade-2:#3b3631;--anatomy-shade-1:#34302b;--anatomy-shade-0:#2d2925;--anatomy-lit-top:#554d45;--anatomy-lit-shade:#463f39}
+.iso[data-theme="dark"] .a3-stage :is([data-name^="cabin."],[data-name^="cockpit."])[data-mat="steel"]{--anatomy-paper:#4a4741;--anatomy-face:#524e48;--anatomy-top:#5e5953;--anatomy-shade-3:#55514b;--anatomy-shade-2:#4c4842;--anatomy-shade-1:#43403a;--anatomy-shade-0:#3a3732;--anatomy-lit-top:#6a645d;--anatomy-lit-shade:#57534c}
+.iso[data-theme="light"] .a3-stage :is([data-name^="cabin."],[data-name^="cockpit."])[data-mat="gunmetal"]{--anatomy-paper:#7d7972;--anatomy-face:#85817a;--anatomy-top:#918d86;--anatomy-shade-3:#88847d;--anatomy-shade-2:#7e7a73;--anatomy-shade-1:#74706a;--anatomy-shade-0:#6a6660;--anatomy-lit-top:#9d9992;--anatomy-lit-shade:#8a867f;--anatomy-hi:#2a2724;--anatomy-mid:#55514c;--anatomy-lo:#66625c;--anatomy-faint:#76726c}
+
+/* the flight deck's upholstery (review round 3): the seats a dark warm upholstery, a step below the consoles' gunmetal and
+   well below the floor, so seats, consoles and floor differ by 25 levels or more (they shared one band in light) */
+.iso[data-theme="light"] .a3-stage :is([data-name^="cockpit.seat"],[data-name^="cockpit.back"],[data-name^="cockpit.head"],[data-name^="cockpit.arm"],[data-name^="cockpit.obs"])[data-mat="rubber"]{--anatomy-paper:#5f5850;--anatomy-face:#665e55;--anatomy-top:#6f665d;--anatomy-shade-3:#645c53;--anatomy-shade-2:#5b544c;--anatomy-shade-1:#524b44;--anatomy-shade-0:#49433c;--anatomy-lit-top:#7a7167;--anatomy-lit-shade:#685f56;--anatomy-hi:#1f1c19;--anatomy-mid:#3d3833;--anatomy-lo:#4a4540;--anatomy-faint:#57514a}
+.iso[data-theme="dark"] .a3-stage :is([data-name^="cockpit.seat"],[data-name^="cockpit.back"],[data-name^="cockpit.head"],[data-name^="cockpit.arm"],[data-name^="cockpit.obs"])[data-mat="rubber"]{--anatomy-paper:#2e2925;--anatomy-face:#332d28;--anatomy-top:#3b342e;--anatomy-shade-3:#352f29;--anatomy-shade-2:#2e2924;--anatomy-shade-1:#28231f;--anatomy-shade-0:#221e1a;--anatomy-lit-top:#443c35;--anatomy-lit-shade:#38312b}
+/* the cabin dimmer on the interior it lights (review round 3; webgl.md 8.3): the loop writes --a3-cabin-mix (the cabin
+   light through the displayed curve cabin^.66) on the stage, and the cavity faces and lines darken toward a warm dark as
+   it falls: up to 50% in dark, 35% by daylight. The canvas painter re-bakes the cabin parts as it moves (kit patch 18) */
+.a3-stage{--a3-cab-dim:#0b0a09;--a3-cab-p:0%}
+.iso[data-theme="light"] .a3-stage{--a3-cab-dim:#55504a}
+/* fu/r2-interiors: the cabin only; the flight deck's dome, flood and console lights are not on the cabin crew's panel (FAP) */
+.iso .a3-stage [data-name^="cabin."][data-mat]{--tn-0:color-mix(in srgb,var(--anatomy-shade-0),var(--a3-cab-dim) var(--a3-cab-p));--tn-1:color-mix(in srgb,var(--anatomy-shade-1),var(--a3-cab-dim) var(--a3-cab-p));--tn-2:color-mix(in srgb,var(--anatomy-shade-2),var(--a3-cab-dim) var(--a3-cab-p));--tn-3:color-mix(in srgb,var(--anatomy-shade-3),var(--a3-cab-dim) var(--a3-cab-p));--tn-4:color-mix(in srgb,var(--anatomy-top),var(--a3-cab-dim) var(--a3-cab-p))}
+/* the overhead panel inset (the Cockpit Inspect view, live.js) */
+.a3-oh{position:absolute;right:10px;top:10px;width:min(30%,230px);z-index:2;pointer-events:none;background:var(--anatomy-card);box-shadow:inset 0 0 0 1px var(--anatomy-faint);border-radius:4px;padding:6px 7px 5px}
+.a3-oh[hidden]{display:none}
+.a3-oh svg{display:block;width:100%;height:auto}
+.a3-oh .a3-oh-t{font:10px/1.2 var(--anatomy-mono);color:var(--anatomy-muted);margin:0 0 4px;letter-spacing:.02em}
+.a3-oh .a3-oh-f{fill:none;stroke:var(--anatomy-lo);stroke-width:.6}
+.a3-oh .a3-oh-p{fill:none;stroke:var(--anatomy-faint);stroke-width:.5}
+.a3-oh .a3-oh-s{fill:var(--anatomy-faint);stroke:none}
+.a3-oh .a3-oh-on{fill:var(--a3-amber)}
+.a3-oh text{font:4.2px var(--anatomy-mono);fill:var(--anatomy-muted)}
+.a3-oh text.a3-oh-n{font-size:3px;letter-spacing:-.02em} /* fu/r2-interaction: the EXT LT lamps' names */
+/* fu/f3-interaction: phones and desktops. The page clears the safe-area insets (the page sets viewport-fit=cover); the
+   card fits the viewport's height (a landscape phone or a 1280 x 800 laptop showed the hint and readout below the
+   fold): the card's height grows about 0.707 px per px of width plus 71 px of corners (0.757 and 102 px in the compact
+   layout under 600 px), so the width is held to what the small viewport height (svh: no resize as the browser's bars
+   slide) can show. Never wider than the kit's 1000 px (the canvas's cost grows with its pixels) */
+.iso-page{width:min(1000px,100% - 32px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px),(100svh - 71px - 2 * clamp(12px,4svh,64px)) * 1.414);margin:clamp(12px,4svh,64px) auto calc(96px + env(safe-area-inset-bottom,0px));padding-top:env(safe-area-inset-top,0px)}
+/* the kit's figure margin (32 px) collapsed through the page's top margin: the page's margin alone sets the gap */
+.iso-page>.iso-figure{margin-top:0}
+@media (max-height:600px) and (orientation:landscape){
+  .iso-page{width:min(1000px,100% - 32px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px),max(240px,(100svh - 118px) * 1.32));margin-top:8px}
+}
+/* a landscape phone: the card on the left at the width its height allows, held in view (sticky) while the legend and
+   the caption scroll beside it (the card alone left the screen's sides empty and the buttons below the fold) */
+@media (max-height:600px) and (orientation:landscape) and (min-width:560px){
+  .iso-page{width:calc(100% - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px))}
+  .iso-page>.iso-figure{display:grid;grid-template-columns:min(55%,max(240px,(100svh - 16px - 102px) * 1.32)) minmax(0,1fr);gap:12px;align-items:start}
+  .iso-page>.iso-figure>.iso-plate{position:sticky;top:8px}
+  .iso-page>.iso-figure>.a3-figcaption{margin-top:0}
+}
+@media (max-width:400px){.iso-page{width:calc(100% - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px));margin-top:8px}}
+/* a narrow plate's touch hint in the corner's width (at 320 px "… or a button" ran 25 px past the plate) */
+.a3-compact .iso-plate-corner[data-corner="hint"]{letter-spacing:.06em}
+/* touch: the page may still be pinch-zoomed over the stage (touch-action), and a tap gives no grey flash */
+.a3-stage{touch-action:pan-y pinch-zoom;-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
+.a3-btn{-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+/* a visible keyboard ring on the stage (1 px at 45% read as no ring on the dark card) */
+.a3-stage:focus-visible{box-shadow:none;outline:2px solid color-mix(in srgb,var(--anatomy-hi) 70%,transparent);outline-offset:-2px;border-radius:3px}
+/* a pen or mouse over a touch screen (hover: hover) keeps the key chips; reduced motion: no eased button states */
+@media (prefers-reduced-motion:reduce){.a3-btn{transition:none}}
+/* fu/f3-interaction end */
+/* fu/f3-interaction: a touch screen beside a mouse or pen (a touch laptop, a tablet with a pen): 44 px targets for the
+   finger, key chips kept for the keyboard */
+@media (any-pointer:coarse){.a3-btn{min-height:44px}}
+/* fu/f3-interaction: the smallest landscape phones (568 x 320): the hint's spacing tightened to keep it off the border */
+@media (max-height:340px) and (orientation:landscape){.a3-compact .iso-plate-corner[data-corner="hint"]{letter-spacing:.02em}}
+/* fu/f4-interaction: landscape tablets, laptops and large monitors. Held to the height, the card left the controls below
+   the fold (review: at 1024 x 768 only the top 30 px of the Phases row showed; 1366 x 768 and 1280 x 800 likewise, and a
+   real browser's bars take more). In a landscape window up to 900 px tall the card stands on the left at the width the
+   height allows (never wider than 1000 px, the canvas cost already measured) and stays in view (sticky) while the legend
+   and caption sit beside it in a column of at least 300 px. On a large monitor at DPR 1-1.5 the card may grow to
+   1400 CSS px (1400-2100 device px across, against the 1440 x 900 @2 laptop's 2000; review: it was held to 1000 px, 39%
+   of a 2560 screen and fewer device pixels than the laptop's), with the legend beside it and the corner type at 12 px */
+@media (orientation:landscape) and (min-height:601px) and (max-height:900px) and (min-aspect-ratio:5/4) and (min-width:900px){
+  .iso{--a3-card:min(1000px,100vw - 16px - 330px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px),(100svh - 16px - 71px) * 1.414)}
+}
+@media (orientation:landscape) and (min-width:1800px) and (max-resolution:1.5dppx){
+  .iso{--a3-card:min(1400px,100vw - 16px - 330px,(100svh - 16px - 71px) * 1.414)}
+  .iso-plate-corner{font-size:12px}
+  .a3-chip,.a3-row-name{font-size:12px}
+  .a3-btn,.a3-tip{font-size:13.5px}
+}
+@media (orientation:landscape) and (min-height:601px) and (max-height:900px) and (min-aspect-ratio:5/4) and (min-width:900px),(orientation:landscape) and (min-width:1800px) and (max-resolution:1.5dppx){
+  .iso-page{width:min(100% - 16px - env(safe-area-inset-left,0px) - env(safe-area-inset-right,0px),var(--a3-card) + 12px + 520px);margin-top:8px}
+  .iso-page>.iso-figure{display:grid;grid-template-columns:var(--a3-card) minmax(300px,1fr);gap:12px;align-items:start}
+  .iso-page>.iso-figure>.iso-plate{position:sticky;top:8px}
+  .iso-page>.iso-figure>.a3-figcaption{margin-top:0}
+  .a3-hint-fine .a3-hint-below{display:none}
+  .a3-hint-fine .a3-hint-beside{display:inline}
+}
+.a3-hint-beside{display:none}
+/* fu/f4-interaction: the stage's keyboard ring (the "dark frame" of the review's phone captures, drawn after a key) lies on
+   the stage's edge; in the narrow layout the stage is 115% wide under the card's clip, so only its top and bottom rules
+   showed. There the ring is drawn on the card instead, inset as on the stage: a closed rectangle */
+.a3-compact .a3-stage:focus-visible{outline:none}
+@media (max-width:600px){.a3-stage:focus-visible{outline:none}.iso-plate.a3-ring::after{content:"";position:absolute;inset:2px;z-index:3;pointer-events:none;border:2px solid color-mix(in srgb,var(--anatomy-hi) 70%,transparent)}}
+.a3-compact .iso-plate.a3-ring::after{content:"";position:absolute;inset:2px;z-index:3;pointer-events:none;border:2px solid color-mix(in srgb,var(--anatomy-hi) 70%,transparent)}
+/* (.a3-ring is set by live.js on the stage's focus, after a key, and cleared on blur; the ::after sits above the stage,
+   which an outline on the card would not) */
+/* fu/f4-interaction end */

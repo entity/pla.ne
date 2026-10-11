@@ -1,0 +1,7 @@
+node_modules/
+a380/shots/
+a380/tmp/
+a380/dist/
+a380/*-verify.html
+*.log
+.env

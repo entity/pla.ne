@@ -1,0 +1,6 @@
+#!/bin/sh
+# Headless Chromium for scripts/{capture,drive,lines,turn-check}.mjs on this machine.
+# Ubuntu 26.04's AppArmor blocks the unprivileged user namespaces Chrome's sandbox needs,
+# so Chrome aborts with "No usable sandbox!" unless it runs with --no-sandbox.
+# Use: export CHROME_PATH=~/projects/anatomy/a380/tools/chrome
+exec "$HOME/.cache/ms-playwright/chromium-1243/chrome-linux64/chrome" --no-sandbox "$@"

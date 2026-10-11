@@ -1,0 +1,12 @@
+[["until","window.__a380 && window.__a380.controller",180000],["wait",2000],
+ ["key"," "],["wait",4000],
+ ["eval","'renderer ' + (__a380.glInfo && __a380.glInfo.renderer) + ' · paused ' + __a380.pv.paused + ' · mode ' + __a380.pv.mode"],
+ ["eval","(window.__z0 = __a380.pv.zoom, window.__t0 = __a380.pv.turn, 'zoom before ' + __a380.pv.zoom + ' turn ' + __a380.pv.turn)"],
+ ["wait",1500],
+ ["eval","'zoom still ' + __a380.pv.zoom + ' (asleep: unchanged over 1.5 s ' + (__a380.pv.zoom === window.__z0) + ')'"],
+ ["eval","(__a380.inspect.step(0, 'engine2'), window.__ts = performance.now(), 'stepped')"],
+ ["wait",1000],
+ ["eval","'after 1 s: zoom ' + __a380.pv.zoom.toFixed(3) + ' (was ' + window.__z0 + ') turn ' + __a380.pv.turn.toFixed(2) + ' (was ' + window.__t0.toFixed(2) + ') · inspect ' + __a380.pv.inspect + ' · ' + (Math.abs(__a380.pv.zoom - window.__z0) > 1e-3 ? 'zoom CHANGED within 1 s' : 'zoom UNCHANGED: the loop slept')"],
+ ["eval","(__a380.inspect.leave(), window.__z1 = __a380.pv.zoom, 'left')"],
+ ["wait",1000],
+ ["eval","'leave after 1 s: zoom ' + __a380.pv.zoom.toFixed(3) + ' (was ' + window.__z1.toFixed(3) + ') · ' + (Math.abs(__a380.pv.zoom - window.__z1) > 1e-3 ? 'zoom CHANGED' : 'zoom UNCHANGED')"]]

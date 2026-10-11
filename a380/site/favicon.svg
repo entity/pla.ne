@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- a380/site/favicon.svg (fu/f3-hosting): the A380 in plan view, nose up, on the figure's dark card -->
+  <rect width="64" height="64" rx="14" fill="#131313"/>
+  <g fill="#e6e6e6">
+    <!-- fuselage -->
+    <path d="M32 5c2.3 0 3.4 2.6 3.4 6.5V47l-1.2 9h-4.4l-1.2-9V11.5C28.6 7.6 29.7 5 32 5z"/>
+    <!-- wings, swept 33.5 degrees, with the tip fences -->
+    <path d="M35 24l23 15.5v4L35 35.5zM29 24L6 39.5v4L29 35.5z"/>
+    <!-- tailplane -->
+    <path d="M34.6 48l9.4 5.6v2.4l-9.8-2.6zM29.4 48L20 53.6v2.4l9.8-2.6z"/>
+  </g>
+  <g fill="#8a8a8f">
+    <!-- the four nacelles -->
+    <rect x="41.2" y="30" width="2.6" height="6" rx="1.2"/>
+    <rect x="49.6" y="35.8" width="2.6" height="6" rx="1.2"/>
+    <rect x="20.2" y="30" width="2.6" height="6" rx="1.2"/>
+    <rect x="11.8" y="35.8" width="2.6" height="6" rx="1.2"/>
+  </g>
+</svg>
