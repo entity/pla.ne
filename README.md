@@ -4,7 +4,7 @@ An interactive, true-3D Airbus A380-800 you can turn, open up and fly from the g
 self-contained web page.
 
 - 795 parts: the double-deck fuselage, wings with slats, flaps, ailerons and spoilers, four Trent 970 engines with
-  spinning fans, 22 wheels on gear that retracts in its true sequence, 18 doors that open, and a towbarless tug.
+  spinning fans, 22 wheels on gear that retracts in its true sequence, 19 doors that open, and a towbarless tug.
 - The cabin opens up: all 555 seats on a deck plan, the cabins in cutaway, and a flight deck with its displays.
 - Every exterior light in WebGL (nav, strobes, beacons, landing, taxi, logo, wing scan), plus cabin windows,
   heat haze and runway lights, drawn by a WebGL painter. A canvas fallback runs where WebGL can't.
