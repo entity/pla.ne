@@ -802,17 +802,42 @@ const wrapModule = (file, name) => {
   const names = [...src.matchAll(/^export\s+(?:async\s+)?(?:function\*?|const|let|class)\s+([A-Za-z0-9_$]+)/gm)].map((m) => m[1]);
   return `const ${name} = (() => {\n${src.replace(/^export\s+/gm, "")}\nreturn { ${names.join(", ")} };\n})();\n`;
 };
-const live = readFileSync(join(HERE, "live.js"), "utf8").replace("const DATA = __DATA__;", () => `const DATA = ${dataSrc};`).replace("\n/*@MODULES@*/\n", () => `\n${reg.scripts.join("\n")}\n`);
+// theme switch: the page script is a theme-independent runtime (runtime-shell.js: the kit, M, F, the GL page files and
+// live.js inside boot()) and the theme (its DATA as a factory: the vary functions and labels are code, and they name
+// the runtime's F, M, A3, A3GL and A3M8, handed over by boot; the layers' markup, turn and GL data in the payload).
+// Both themes build the same runtime byte for byte (build-site.mjs checks it); the site loads one theme at a time
+const live = readFileSync(join(HERE, "live.js"), "utf8")
+  .replace("const DATA = __DATA__;", () => 'const DATA = THEME.data(Object.assign(A3S, { F, M, A3GL, A3M8: typeof A3M8 !== "undefined" ? A3M8 : undefined }));')
+  .replace("window.__a380 = A3;", () => "window.__a380 = A3;\nif (A3S.bindA3) A3S.bindA3(A3);")
+  .replace("\n/*@MODULES@*/\n", () => `\n${reg.scripts.join("\n")}\n`);
+if (!live.includes("THEME.data(") || !live.includes("A3S.bindA3(A3)")) throw new Error("build: live.js lost its DATA or window.__a380 line (the theme factory's hooks)");
+const THEME_NAME = LIGHT ? "light" : "dark";
+const themeSrc = `(window.__A3THEME ??= {})[${JSON.stringify(THEME_NAME)}] = { name: ${JSON.stringify(THEME_NAME)}, light: ${LIGHT}, data: (S) => {
+  const { F, M, A3GL, A3M8, A3P } = S;
+  const LIGHT = ${LIGHT ? 1 : 0};
+  let A3;
+  S.bindA3 = (a) => {
+    A3 = a;
+  };
+  return ${dataSrc};
+} };`;
 const pageFiles = ["gl/runtime.js", "gl/harness.js", "gl/mask.js", "gl/passes.js", "gl/runway.js"].map((f) => `// ==== a380/${f}\n${readFileSync(join(HERE, f), "utf8")}`).join("\n");
 // the payload's loader: top-level await in the page's module script, so the figure's own code runs after it
 const payloadJson = JSON.stringify(payload);
+// theme switch: the inflate stays in the standalone page (its boot section); the markup's install is the runtime's, so a
+// remount in the other theme installs that theme's markup
 const loader = PAYLOAD
   ? `const A3P = await (async () => {
   const text = atob(${JSON.stringify(deflateRawSync(Buffer.from(payloadJson, "utf8"), { level: 9 }).toString("base64"))});
   const bytes = new Uint8Array(text.length);
   for (let i = 0; i < text.length; i++) bytes[i] = text.charCodeAt(i);
   const json = await new Response(new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"))).text();
-  const p = JSON.parse(json);
+  return JSON.parse(json);
+})();`
+  : "const A3P = {};";
+const install = `await (async () => {
+  const p = A3S.A3P;
+  if (p.deck === undefined && p.airframe === undefined) return;
   for (const name of ["deck", "airframe"]) {
     const svg = document.querySelector(\`svg[data-live="\${name}"]\`);
     if (svg && p[name] !== undefined) svg.innerHTML = p[name];
@@ -829,13 +854,19 @@ const loader = PAYLOAD
       setTimeout(done, 0);
     });
   });
-  return p;
-})();`
-  : "";
+})();`;
 // fu/r2-verify: the page carries the sources it was built from (git describe and a hash of the a380/ and kit/ sources,
 // scripts/source-hash.mjs); lines.mjs and turn-check print it and warn when the working tree differs
 const SOURCE_STAMP = { ...sourceStamp(join(HERE, "..")), at: new Date().toISOString().slice(0, 19) + "Z" };
-const script = [`window.__a380Source = ${JSON.stringify(SOURCE_STAMP)};`, (PAINTER === "canvas" ? fixedScript() : turnScript()), glScript(), wrapModule("model.mjs", "M"), wrapModule("follow.mjs", "F"), pageFiles, VERIFY ? `window.__isoVerify = ${JSON.stringify(out.verify)};` : "", loader, live].join("\n");
+const body = [(PAINTER === "canvas" ? fixedScript() : turnScript()), glScript(), wrapModule("model.mjs", "M"), wrapModule("follow.mjs", "F"), pageFiles, install, live].join("\n");
+const shell = readFileSync(join(HERE, "runtime-shell.js"), "utf8");
+if (shell.split("/*@BODY@*/").length !== 2) throw new Error("build: runtime-shell.js must hold one /*@BODY@*/ marker");
+const runtime = shell.replace("/*@BODY@*/", () => body);
+// the page script's sections, each between markers (a380/tools/build-site.mjs splits the page there): the runtime, the
+// theme and the standalone page's boot (the payload inflated from the page, then boot())
+const section = (name, text) => `/*@a3:${name}@*/\n${text}\n/*@a3:${name}:end@*/`;
+const bootSrc = `${loader}\nwindow.__a380Figure = await window.__A3RT.boot({ ...window.__A3THEME[${JSON.stringify(THEME_NAME)}], p: A3P });`;
+const script = [`window.__a380Source = ${JSON.stringify(SOURCE_STAMP)};`, VERIFY ? `window.__isoVerify = ${JSON.stringify(out.verify)};` : "", section("runtime", runtime), section("theme", themeSrc), section("boot", bootSrc)].join("\n");
 // fu/f3-interaction: the public page's head: a title and description for a reader arriving from a link, viewport-fit=cover
 // (a380.css clears the safe-area insets), and the theme's colour for the browser's bars
 const page = k

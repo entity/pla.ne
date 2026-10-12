@@ -370,6 +370,11 @@ stage.addEventListener("blur", () => (focused = false));
 // modes, seek, rewind
 // ---------------------------------------------------------------------------------------------
 let idleTimer = 0;
+let idleDue = 0; // theme switch (site): when the idle timer fires, so a remount carries it
+const armIdle = (ms) => {
+  idleDue = performance.now() + ms;
+  return setTimeout(idleResume, ms);
+};
 let idleArmed = false; // a reader's hold (not a tool's): the tour resumes 30 s after the held phase settles
 let holdAt = 0;
 let wasSettled = true;
@@ -383,7 +388,7 @@ function hold(why) {
   idleArmed = why !== "tool" && !still.matches;
   holdAt = performance.now();
   wasSettled = heldSettled();
-  if (idleArmed) idleTimer = setTimeout(idleResume, IDLE_MS);
+  if (idleArmed) idleTimer = armIdle(IDLE_MS);
   syncLegend();
 }
 /** The held phase has finished what it was asked to do: no seek, no engine start, its goals met (the gate: doors still). */
@@ -404,7 +409,7 @@ function idleResume() {
   if (!heldSettled() && performance.now() - holdAt < IDLE_WAIT_MAX) {
     // the chosen phase is still running (a seek, an engine start, a take-off roll): wait for it to finish, then hold
     // it 30 s (the tick restarts the timer when it settles)
-    idleTimer = setTimeout(idleResume, 3000);
+    idleTimer = armIdle(3000);
     return;
   }
   resumeTourClean();
@@ -802,8 +807,10 @@ const tip = (text, ms = 3000) => {
 };
 // an action that is not legal now arms where arming is meaningful (DESIGN §1): seek or rewind to `phase`, then run
 let armed = null;
-const arm = (phase, then, words) => {
-  armed = { phase, then, words };
+// theme switch (site): an armed action is named (kind, arg), so a remount in another theme can carry it
+const ARMED = {};
+const arm = (phase, kind, arg, words) => {
+  armed = { phase, kind, arg, words, then: () => ARMED[kind](arg) };
   seekTo(phase);
   if (pv.seek) pv.seek.arming = words;
 };
@@ -933,6 +940,10 @@ const toggleDoors = (ids, open = null) => {
   setOverride("doors", { ...(sim.overrides.doors ?? {}), ...Object.fromEntries(ids.map((d) => [d, closing ? 0 : 1])) });
   return closing;
 };
+ARMED.door = (id) => {
+  toggleDoors(id ? [id] : M.DOOR_IDS, true);
+  say(`${id ? `Door ${id}` : "Doors"} opening`);
+};
 A3.actions.door = (id) => {
   const ids = id ? [id] : M.DOOR_IDS;
   const what = id ? `Door ${id}` : "Doors";
@@ -942,10 +953,7 @@ A3.actions.door = (id) => {
   if (!onGroundStill() || sim.phase !== "GATE") {
     // in flight, moving, or anywhere past the stand: rewind to the stand, then open (DESIGN §1, "Arming"); the phase
     // label never changes without the aircraft being there
-    arm("GATE", () => {
-      toggleDoors(ids, true);
-      say(`${what} opening`);
-    }, "arming doors");
+    arm("GATE", "door", id, "arming doors");
     say(`Rewinding to the stand · arming ${id ? `door ${id}` : "doors"}`);
     return;
   }
@@ -1171,14 +1179,15 @@ const startCheck = () => {
   checkT = 0;
   say("Flight control check: roll, pitch and yaw, full and free");
 };
+ARMED.check = () => {
+  checkStill = -1;
+  startCheck();
+};
 A3.actions.check = () => {
   if (pv.seek && pv.seek.reader) return refuse(`Control check: wait for the ${pv.seek.kind === "back" ? "rewind" : "seek"} to arrive`); // fu/r2-interaction
   if (!sim.state.onGround || Math.abs(sim.state.speed) > 40) {
     // in flight: rewind to the taxi, then run the check (DESIGN §1, "Arming")
-    arm("TAXI", () => {
-      checkStill = -1;
-      startCheck();
-    }, "arming control check");
+    arm("TAXI", "check", null, "arming control check");
     say("Rewinding to the taxi · arming the control check");
     return;
   }
@@ -2436,7 +2445,7 @@ function tick(now) {
     const settled = heldSettled();
     if (settled && !wasSettled) {
       clearTimeout(idleTimer);
-      idleTimer = setTimeout(idleResume, IDLE_MS);
+      idleTimer = armIdle(IDLE_MS);
     }
     wasSettled = settled;
   }
@@ -2740,6 +2749,44 @@ still.addEventListener("change", () => {
   pv.mode = still.matches ? "hold" : "tour";
   wake();
 });
+// theme switch (the site's index.html swaps the theme in place: a380/tools/build-site.mjs): the page's state as plain
+// data, and its restore in the remounted figure of the other theme. Carried: the model and its overrides, the page
+// values and springs (zoom, centre, cutaway, lights), the rewind history, the tour, the pause, a seek, the reader's
+// settings, the turntable and its inertia, Inspect and a view change in flight, an armed action and the idle timer.
+// Not carried: render caches, the quality governor and the WebGL fade-in, which start as on a first load
+const carryLets = () => ({ historyClock, seekRecorded, idleArmed, holdAt, wasSettled, reducedTugHeld, doneSaid, tugSaid, readerCabin, tourCut, engSeq, lever, leverDir, checkT, checkStill, omega, turnTarget, clock, inspectCabin });
+A3.snapshot = () =>
+  structuredClone({
+    sim,
+    pv: { ...pv, label: null },
+    env: Object.fromEntries(Object.entries(env).filter(([k]) => k !== "glShare" && k !== "first")),
+    history,
+    lets: carryLets(),
+    armed: armed && { phase: armed.phase, kind: armed.kind, arg: armed.arg, words: armed.words },
+    inspect: inspect ? inspect.index : null,
+    transit: transit && { ...transit, from: transit.from ? transit.from.id : null, to: transit.to.id },
+    readoutView,
+    lightState,
+    idleLeft: idleArmed && pv.mode === "hold" ? Math.max(0, idleDue - performance.now()) : null,
+  });
+if (typeof A3RT_CARRY !== "undefined" && A3RT_CARRY) {
+  const C = A3RT_CARRY;
+  sim = C.sim;
+  const { glShare: _glShare, first: _first, ...pvCarried } = C.pv;
+  Object.assign(pv, pvCarried);
+  Object.assign(env, C.env);
+  history.push(...C.history);
+  ({ historyClock, seekRecorded, idleArmed, holdAt, wasSettled, reducedTugHeld, doneSaid, tugSaid, readerCabin, tourCut, engSeq, lever, leverDir, checkT, checkStill, omega, turnTarget, clock, inspectCabin } = C.lets);
+  if (C.armed && ARMED[C.armed.kind]) armed = { ...C.armed, then: () => ARMED[C.armed.kind](C.armed.arg) };
+  const viewOf = (id) => VIEWS.find((v) => v.id === id) ?? null;
+  if (C.inspect !== null && VIEWS[C.inspect]) inspect = { view: VIEWS[C.inspect], index: C.inspect };
+  if (C.transit && viewOf(C.transit.to)) transit = { ...C.transit, from: viewOf(C.transit.from), to: viewOf(C.transit.to) };
+  readoutView = C.readoutView;
+  Object.assign(lightState, C.lightState);
+  nameView(viewOf(pv.inspect));
+  if (C.idleLeft !== null) idleTimer = armIdle(C.idleLeft);
+  A3.state = sim.state;
+}
 syncLever();
 syncLegend();
 writeReadout();
