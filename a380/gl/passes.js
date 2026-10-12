@@ -856,11 +856,11 @@ const A3M8 = (() => {
         const phase = (fx.pv.fanPhase ? fx.pv.fanPhase[e.i] : 0) * e.sense;
         const R = e.r * 10 * k + 3;
         const box = [a.screen[0] - R, a.screen[1] - R, a.screen[0] + R, a.screen[1] + R];
-        const v = { ...mask, ...pose, uPass: e.i, uTarget: idOf(fx, e.part), uFirst: st.first, uNoDither: nd() };
+        const v = { ...mask, ...pose, uEng: e.eng, uPass: e.i, uTarget: idOf(fx, e.part), uFirst: st.first, uNoDither: nd() };
         // the once-per-rev mark: in with N1 from rest, out once its own blur passes a radian
         const mark = smooth(0.003, 0.03, n1) * (1 - smooth(0.8, 2.2, omega * st.exposure));
-        v[`uRun${e.i}`] = [phase, fx.calm ? stillGain(omega * st.exposure, 0.3) : blurGain(omega * st.exposure), n1, mark];
-        v[`uGain${e.i}`] = fx.calm ? fanGainsStill(omega, st.exposure, D.fan.blades) : fanGains(omega, st.exposure, D.fan.blades);
+        v.uRun = [phase, fx.calm ? stillGain(omega * st.exposure, 0.3) : blurGain(omega * st.exposure), n1, mark];
+        v.uGain = fx.calm ? fanGainsStill(omega, st.exposure, D.fan.blades) : fanGains(omega, st.exposure, D.fan.blades);
         pass(v, box);
         probeInk(spec, `eng:${e.n}`, box);
       }

@@ -1488,28 +1488,29 @@ float beamPools(vec3 g){
 /**
  * The inlet, fan and spinner of one nacelle (DESIGN §6.2 `engines`), from the seeded glslEngine with every
  * fwidth() in uniform control flow (no early return after a per-pixel test; d is uniform: the camera is
- * orthographic). e: kit metres { y, z, xl (lip plane), ri (M4's inlet disc), depth (lip to fan), rs, ls
- * (spinner), blades, twist, slit, spiral }. uRun<i> = (fan phase × sense, spinner gain, n1, 0); uGain<i> =
- * blade harmonic gains (fanGains). The fan turns clockwise as the reader sees the inlet (sense from the build).
+ * orthographic). One function for the four nacelles (perf/gl-light-uniforms: the baked form was a copy a nacelle, its
+ * place in literals): uEng = (y, z, xl (lip plane), 0) kit metres, set on each nacelle's pass; e: the fan, kit metres
+ * { ri (M4's inlet disc), depth (lip to fan), rs, ls (spinner), blades, twist, slit, spiral }. uRun = (fan phase ×
+ * sense, spinner gain, n1, mark gain); uGain = blade harmonic gains (fanGains). The fan turns clockwise as the reader
+ * sees the inlet (sense from the build).
  */
 /** The spinner's painted spiral stripe: half its width, in radians of the spinner's angle (fu/f4-wings). */
 export const SPIRAL_HW = 0.1;
-export function glslNacelle(i, e) {
-  const C = v2([e.y, e.z]);
-  const xf = e.xl - e.depth;
-  const k2 = (e.rs / e.ls) ** 2;
+export function glslNacelle(e) {
   return `
-uniform vec4 uRun${i};
-uniform vec4 uGain${i};
-vec4 engine${i}(vec3 o,vec3 d){
-  vec4 run=uRun${i};vec4 g=uGain${i};
+uniform vec4 uEng;
+uniform vec4 uRun;
+uniform vec4 uGain;
+vec4 engine(vec3 o,vec3 d){
+  vec4 run=uRun;vec4 g=uGain;
+  vec2 C=uEng.xy;float xl=uEng.z;float xf=xl-${f(e.depth)};
   if(d.x<.015)return vec4(0.);
   float face=smoothstep(.015,.12,d.x);
-  vec3 pl=o+((${f(e.xl)}-o.x)/d.x)*d;float rl=length(pl.yz-${C});
+  vec3 pl=o+((xl-o.x)/d.x)*d;float rl=length(pl.yz-C);
   float open=(1.-smoothstep(-.5,.5,(rl-${f(e.ri)})/FW(rl)+strokePx()))*face;
-  vec3 pf=o+((${f(xf)}-o.x)/d.x)*d;vec2 w=pf.yz-${C};float rf=length(w);
-  vec2 wall=cylX(o,d,${C},${f(e.ri)});
-  float depth=clamp((${f(e.xl)}-(o.x+wall.x*d.x))/${f(e.depth)},0.,1.);
+  vec3 pf=o+((xf-o.x)/d.x)*d;vec2 w=pf.yz-C;float rf=length(w);
+  vec2 wall=cylX(o,d,C,${f(e.ri)});
+  float depth=clamp((xl-(o.x+wall.x*d.x))/${f(e.depth)},0.,1.);
   float onWall=smoothstep(-.5,.5,(rf-${f(e.ri)})/FW(rf));
   float r=rf/${f(e.ri)};
   float u=${f(e.blades)}*(atan(w.y,w.x)-run.x)+${f(e.twist)}*r;
@@ -1530,7 +1531,7 @@ vec4 engine${i}(vec3 o,vec3 d){
   // the spinner (review round 3): half an ellipsoid on the fan plane (semi-axes ls forward, rs across), one surface with
   // one near root, so no mirrored nappe and no far root can be drawn (the double cone drew a half cone and a pale wedge
   // beside it, with a speckled seam where the root choice flipped); soft at its silhouette and base
-  vec3 w0=o-vec3(${f(xf)},${f(e.y)},${f(e.z)});
+  vec3 w0=o-vec3(xf,C);
   // fu/wings: solve from the ray's closest approach to the base centre: from o itself (far up the ray) qb*qb and qa*qc
   // are large and nearly equal, and their float difference stepped near the silhouette (the dotted, stepped edge, R18 R39)
   w0+=(-dot(w0,d)/dot(d,d))*d;

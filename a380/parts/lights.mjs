@@ -538,21 +538,18 @@ void main(){
     const sv = S([o[0], o[1], o[2] + 10]);
     return (su[0] - s0[0]) * (sv[1] - s0[1]) - (su[1] - s0[1]) * (sv[0] - s0[0]) > 0 ? 1 : -1;
   })();
-  const engFns = W.NACELLE.map((N, i) => {
-    const e = { y: N.y, z: N.cz, xl: W.PIVOT_X - N.lip, len: 8.39, rn: 1.94, ri: FAN.ri, depth: FAN.depth, rs: FAN.rs, ls: FAN.ls, blades: FAN.blades, twist: FAN.twist, slit: FAN.slit, spiral: FAN.spiral };
-    page.engines.push({ i, n: N.id, part: `eng.${N.id}.lip`, at: W.kit([N.lip, N.y, N.cz]), r: 1.94, sense });
-    return SH.glslNacelle(i, e);
-  });
+  // one function for the four nacelles, each placed by its pass's uEng (page.engines[i].eng: y, z, the lip plane x)
+  W.NACELLE.forEach((N, i) => page.engines.push({ i, n: N.id, part: `eng.${N.id}.lip`, at: W.kit([N.lip, N.y, N.cz]), r: 1.94, sense, eng: [N.y, N.cz, W.PIVOT_X - N.lip, 0] }));
+  const ENGINE = SH.glslNacelle({ ri: FAN.ri, depth: FAN.depth, rs: FAN.rs, ls: FAN.ls, blades: FAN.blades, twist: FAN.twist, slit: FAN.slit, spiral: FAN.spiral });
   const ENGINES = `${COMMON}${glslPose("Plane")}
-${engFns.join("\n")}
+${ENGINE}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(towardViewer()));
-  vec4 ink=vec4(0.);
-  ${W.NACELLE.map((_, i) => `${i ? "else " : ""}if(uPass<${f(i + 0.5)})ink=engine${i}(o,d);`).join("\n  ")}
+  vec4 ink=engine(o,d);
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
 }`;
-  ctx.glEffect({ id: "engines", canvas: "air", fragment: ENGINES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", ...W.NACELLE.flatMap((_, i) => [`uRun${i}`, `uGain${i}`]), "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
+  ctx.glEffect({ id: "engines", canvas: "air", fragment: ENGINES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uEng", "uRun", "uGain", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
 
   // ---- washes: logo on the fin pieces (by day a warm darkening of the fin's paint, cap .3, gain 3, R > G > B), wing
   // scan on the outer box tops and slats, engine scan on the cowls
