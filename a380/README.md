@@ -341,6 +341,28 @@ Before is the release at 02ab044 (its two pages and the redirecting index); afte
 | `build.mjs --check`, `scripts/lines.mjs` | | check passed (both themes); line ends 0 of 630 float (both pages and the site page) |
 | `site-check --layout` / `--nojs` | | passed, both themes, 320 × 568 to 1440 × 900 (44 px touch targets) |
 
+### Measured: GL start-up (perf/gl-light-uniforms, 2026-10-12, forge, Radeon 8060S through ANGLE GL, headless Chrome)
+
+The window pieces, wash targets and nacelles now draw from uniform tables set on each pass (one program a family, not
+a function a piece with its numbers as literals), the drawn cockpit program no longer carries the build-constant passes,
+and the runway, volumes and ground programs carry both themes' rules under `uLight`: every program is the same source
+in both themes. Before is aa17152.
+
+| | Before | After |
+|---|---|---|
+| Programs compiled; GLSL (payload `gl.effects` fragments, dark) | 25; 677 KB (632 KB compiled) | 10; 184 KB (139 KB compiled) |
+| Sources differing between the themes | 5 programs | none |
+| Uniform vectors, largest program | 99 | 167 (windows) |
+| Cold load, `site-check --timing` medians, desktop: mounted / first light | 293 / 6,532 ms | 287 / 4,996 ms |
+| Cold load, phone (390, 4× CPU, 4G): mounted / first light | 1,731 / 9,868 ms | 1,587 / 6,766 ms |
+| Every program linked, after the mount (desktop, 3 runs); then the fade to glShare 0.999 | 2.24–2.41 s; 3.7 s | 0.98–1.06 s; 3.7 s |
+| A switch (prefetched), dark to light at 1440: new figure / programs linked / lights whole | 0.15 / 1.59–1.62 / 5.35–5.39 s | 0.15–0.17 / 0.75–0.77 / 4.30–4.54 s |
+| Parity (`--reduced`, paused, no dither; gate ×2, doors ×2, cutaway, Inspect Cockpit, Upper deck, Engine 2, push, taxi, line-up ×2, take-off ×2, climb; `png-diff` over 8 levels) | run against run: 0 px (max 8) | 0 px in 28 of 30 shots (max 8); dark doors b100 and Inspect Upper deck 4 px each (one 2 × 2 spot at a window edge, max 15 and 21) |
+| `build.mjs --check` (both themes), `model-test`, `site-check --layout`, `?painter=canvas`, no WebGL | passed | passed; console clean |
+
+After a switch the programs come from the browser's shader cache, but at one in flight they still take two frames
+each; most of the switch's time to whole lights, and of first light, is now the fade.
+
 ## Measured: the finished figure (2026-10-11, 22:52–23:45 UTC)
 
 The shipping pages and `a380/dist/` were checked against `main` at 5f7c95b (sources identical to 92d6ad6:
@@ -509,8 +531,11 @@ round's larger deck (2,463 live elements against 1,690). The Node frame is 0.1�
   (`jointCaps`) is not adopted yet; the pylon flank is a flat face, shaded flat. The intake lip's gradients use 2
   pieces while the figure moves and 4 at rest (about 25–30% less lip draw time). A 1 px fin/rudder strip shows at 219°
   (the fin's trailing-edge face passing edge-on).
-- **Lights and WebGL.** First light takes 9–11 s under machine load: the 25 programs compile one at a time in the GPU
-  process (profiled; nothing in the page's code is left to cut). The heat haze is drawn in both themes with WebGL and
+- **Lights and WebGL.** The 10 programs (perf/gl-light-uniforms: 25 before, 632 KB of GLSL now 139 KB) link about
+  1 s after the mount at 1440; most of first light is now the fade from the fallbacks to GL (`settle(glShare, 1, dt,
+  0.4)`, critically damped: half way in 0.65 s, at 0.999 after 3.7 s), which runs again after a theme switch. The
+  windows program holds 72 hull planes a pass: 167 uniform vectors (99 before), within the 221–224 of the smallest
+  common WebGL 1 limit but not of a 128-vector one. The heat haze is drawn in both themes with WebGL and
   not at all without it. Without WebGL the night washes, pools, beams and runway lights are screen-blended as the GL
   canvases are, and the lamp lenses use the GL mask's cover rule (the nose-strut lens blob at b10 is gone); still: each
   beam is a flat banded shaft, the logo bands show faint contour seams at DPR 2, at DPR 1 the runway lights lack GL's
