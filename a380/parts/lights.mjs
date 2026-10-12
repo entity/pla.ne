@@ -98,22 +98,6 @@ export const WASH_SLOTS = { logo: [0, 1], wing: [2, 3], engine: [4, 5] };
 const N_LAMPS = 24;
 
 // --------------------------------------------------------------------------------------------- helpers
-/**
- * Consecutive groups { from, to } of generated functions, each holding at most `budget` characters of them (at least
- * one function a group). Follow-up item 34: a program's compile and link time on this machine's GPU grows with its
- * source at about 4-5 ms per KB, and no program may take over about 200 ms.
- */
-const CHUNK_BUDGET = 26 * 1024;
-export function chunksOf(sources, budget) {
-  const out = [];
-  let cur = null;
-  sources.forEach((s, k) => {
-    if (!cur || (cur.size + s.length > budget && cur.to > cur.from)) out.push((cur = { from: k, to: k, size: 0 }));
-    cur.to = k + 1;
-    cur.size += s.length;
-  });
-  return out;
-}
 const unit = (a) => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
@@ -473,12 +457,10 @@ export function build(ctx) {
 
   // ---- windows: one pass per window-bearing piece (its own faces), rows and doorways from W and the model
   const wparts = windowParts(W, M);
-  const winFns = [];
   let frustumOk = 0;
   wparts.forEach((wp, k) => {
     const part = ctx.part(wp.name);
     if (!part) throw new Error(`M8: window piece ${wp.name} was not built`);
-    const fn = `win${k}`;
     // the piece's surface: glslFrustumPolygon over W.loft's rings and clip flats (homothetic nose and tail rings,
     // S0 on the barrel, the belt strips), checked against the built part's own faces; the faces win a mismatch
     const planes = loftPlanes(W, wp.name, part);
@@ -487,7 +469,7 @@ export function build(ctx) {
     // the piece's own x range (kit metres): its window ink stops at its joints (a tan tick ran down every joint)
     const shell = W.SHELL.find((p) => p.name === wp.name);
     const xr = [W.PIVOT_X - shell.x[1], W.PIVOT_X - shell.x[0]];
-    winFns.push(SH.glslWindowPart(fn, { planes: planes.match ? planes.loft : SH.planesOfHull(part), rows: wp.rows, doors: wp.doors, xr }, SURF));
+    const table = SH.windowPartData({ planes: planes.match ? planes.loft : SH.planesOfHull(part), rows: wp.rows, doors: wp.doors, xr }, SH.WIN_N, wp.name);
     // scissor bands: each row's two ends on each side's skin, and each doorway's centre, with the reach of
     // their ink (half the window height plus the 0.55 m glow; a doorway's half diagonal), kit units
     const onSkin = (x, z, side) => W.kit(W.facetFrame(x, z, side).o).map((v) => Math.round(v * 100) / 100);
@@ -502,29 +484,25 @@ export function build(ctx) {
       const c = onSkin(x, dw.z, dw.side);
       bands.push({ a: c, b: c, r: W.m(Math.hypot(dw.hw, dw.hh) + 0.15) });
     }
-    page.windows.push({ pass: k, part: wp.name, group: wp.group, rows: wp.rows.reduce((a, r) => a + r.xs.length * (r.side ? 1 : 2), 0), doors: wp.doors.map((d) => d.id), bands });
+    page.windows.push({ pass: k, part: wp.name, group: wp.group, table, rows: wp.rows.reduce((a, r) => a + r.xs.length * (r.side ? 1 : 2), 0), doors: wp.doors.map((d) => d.id), bands });
   });
   const nWin = page.windows.reduce((a, w) => a + w.rows, 0);
   const nDoor = page.windows.reduce((a, w) => a + w.doors.length, 0);
   report.push(`windows: ${nWin} windows and ${nDoor} doorways on ${wparts.length} pieces; glslFrustumPolygon matches the built faces on ${frustumOk}`);
   const COMMON = `${SH.GLSL_COMMON}${SH.GLSL_MASK}`;
-  // split into chunks of whole pieces (follow-up item 34): one program held all 19 pieces and took 0.7-0.9 s to compile
-  const WINDOWS = chunksOf(winFns, CHUNK_BUDGET).map(({ from, to }) => ({
-    from,
-    to,
-    fragment: `${COMMON}${glslPose("G")}
-uniform vec4 uDoors[5];
+  // one program for every piece (perf/gl-light-uniforms): each piece's hull, rows and doorways are uniform tables set on
+  // its pass (SH.windowPartData, page.windows[k].table). Follow-up item 34 had split the baked form, a function per
+  // piece with every number a literal, into 11 programs of 18-34 KB (one held all 19 pieces and took 0.7-0.9 s to compile)
+  const WINDOWS = `${COMMON}${glslPose("G")}
 uniform vec4 uCabin;
-${winFns.slice(from, to).join("\n")}
+${SH.glslWindowPart("winPart", SH.WIN_N, SURF)}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toG(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToG(towardViewer()));
-  vec4 ink=vec4(0.);
-  ${winFns.slice(from, to).map((_, j) => `${j ? "else " : ""}if(uPass<${f(from + j + 0.5)})ink=win${from + j}(o,d,uCabin.x,uCabin.y);`).join("\n  ")}
+  vec4 ink=winPart(o,d,uCabin.x,uCabin.y);
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
-}`,
-  }));
-  WINDOWS.forEach((c, i) => ctx.glEffect({ id: `windows.${i}`, family: "windows", chunk: [c.from, c.to], canvas: "air", fragment: c.fragment, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uDoors", "uCabin", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] }));
+}`;
+  ctx.glEffect({ id: "windows", canvas: "air", fragment: WINDOWS, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uWP", "uWI", "uWR", "uWX", "uWB", "uWDA", "uWDB", "uWDC", "uWG", "uCabin", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
 
   // ---- cockpit: panes on the canopy (cut.fd) with the panel behind them; the lifted displays (cockpit group)
   const canopy = ctx.part("nose.canopy");
@@ -584,9 +562,9 @@ void main(){
   // by daylight too: a warm paper tint (cap .18, gain 3: a tint near .1 reads grey on white paint), so the Logo switch
   // shows on the light page
   // review round 3: by daylight a multiply-like warm tint of the fin's own grey, tonemapped (no flat slab at a cap)
-  for (const name of finParts) washTargets.push({ name, kind: "logo", slots: WASH_SLOTS.logo, colours: { dark: SH.inkU("logo"), cap: LIGHT_THEME ? 0.3 : 0, paperGain: 3, mul: SH.inkU("logo") } });
-  for (const name of scanTargetNames(ctx, W)) washTargets.push({ name, kind: "scan", slots: [...WASH_SLOTS.wing, ...WASH_SLOTS.engine], colours: { dark: SH.inkU("scan"), tint: SH.inkU("scan"), cap: 0.15 } });
-  const washFns = washTargets.map((t, k) => {
+  for (const name of finParts) washTargets.push({ name, kind: "logo", slots: WASH_SLOTS.logo, colours: { logo: true, cap: LIGHT_THEME ? 0.3 : 0, paperGain: 3 } });
+  for (const name of scanTargetNames(ctx, W)) washTargets.push({ name, kind: "scan", slots: [...WASH_SLOTS.wing, ...WASH_SLOTS.engine], colours: { logo: false, cap: 0.15 } });
+  washTargets.forEach((t, k) => {
     const part = ctx.part(t.name);
     let target;
     if (part.kind === "hull") target = { hull: SH.planesOfHull(part) };
@@ -597,33 +575,24 @@ void main(){
       u = unit(u);
       const v = cross(a, u);
       target = { cone: { c: mul(Wd.F.o, KM), a, u, v, s0: Wd.s0 * KM, s1: Wd.s1 * KM, r0: Wd.r0 * KM, r1: Wd.r1 * KM } };
-    } else return null;
-    page.washes.push({ pass: k, part: t.name, group: part.group.name ?? "pitch", kind: t.kind });
-    return SH.glslWash(`wash${k}`, target, t.slots, t.colours);
+    } else return;
+    page.washes.push({ pass: k, part: t.name, group: part.group.name ?? "pitch", kind: t.kind, table: SH.washTargetData(target, t.colours, SH.WASH_N, t.name) });
   });
-  // split into chunks of whole targets (follow-up item 34: one program of 35 targets took 0.7 s to compile)
-  const WASHES = chunksOf(washFns.map((s) => s ?? ""), CHUNK_BUDGET).map(({ from, to }) => ({
-    from,
-    to,
-    fragment: `${COMMON}${glslPose("G")}
+  // one program for every target (perf/gl-light-uniforms): each target's surface and colours are uniform tables set on
+  // its pass (SH.washTargetData, page.washes[k].table), so the program is the same in both themes. Follow-up item 34 had
+  // split the baked form, a function per target, into 6 programs (one of all 35 targets took 0.7 s to compile)
+  const WASHES = `${COMMON}${glslPose("G")}
 uniform vec3 uWS[6];
 uniform vec3 uWD[6];
 uniform vec4 uWC[6];
-${washFns.slice(from, to).filter(Boolean).join("\n")}
+${SH.glslWash("wash")}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toG(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToG(towardViewer()));
-  vec4 ink=vec4(0.);
-  ${washFns
-    .slice(from, to)
-    .map((s, j) => (s ? from + j : -1))
-    .filter((k) => k >= 0)
-    .map((k, j) => `${j ? "else " : ""}if(uPass<${f(k + 0.5)})ink=wash${k}(o,d);`)
-    .join("\n  ")}
+  vec4 ink=wash(o,d);
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
-}`,
-  }));
-  WASHES.forEach((c, i) => ctx.glEffect({ id: `washes.${i}`, family: "washes", chunk: [c.from, c.to], canvas: "air", fragment: c.fragment, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uWS", "uWD", "uWC", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] }));
+}`;
+  ctx.glEffect({ id: "washes", canvas: "air", fragment: WASHES, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uWS", "uWD", "uWC", "uXP", "uXI", "uXC", "uXK", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
   report.push(`washes: ${washTargets.length} targets (${washTargets.filter((t) => t.kind === "logo").length} logo)`);
 
   // ---- lights: one pass per point light and per lamp lens (the `points` kind; id "lights")
@@ -746,13 +715,11 @@ void main(){
   fallbacks(ctx, page, stand, report);
 
   // ---- page: data, the frame hook, CSS
-  const sum = (list) => list.reduce((a, c) => a + c.fragment.length, 0);
-  const most = (list) => Math.max(...list.map((c) => c.fragment.length));
-  page.sources = { windows: sum(WINDOWS), cockpit: COCKPIT.length, engines: ENGINES.length, washes: sum(WASHES), ground: GROUND.length };
+  page.sources = { windows: WINDOWS.length, cockpit: COCKPIT.length, engines: ENGINES.length, washes: WASHES.length, ground: GROUND.length };
   ctx.data("m8", page);
   ctx.script(`A3.on("frame", (fx) => A3M8.frame(fx));\nA3M8.attach(A3);`);
   ctx.css(`${SH.inkCss()}\n${CSS}\n${windowPaperCss()}\n${lensCss()}`);
-  report.push(`programs: ${Object.entries(page.sources).map(([k, v]) => `${k} ${(v / 1024).toFixed(0)} KB`).join(", ")}; windows in ${WINDOWS.length} programs (largest ${(most(WINDOWS) / 1024).toFixed(0)} KB), washes in ${WASHES.length} (largest ${(most(WASHES) / 1024).toFixed(0)} KB)`);
+  report.push(`programs: ${Object.entries(page.sources).map(([k, v]) => `${k} ${(v / 1024).toFixed(0)} KB`).join(", ")}`);
   for (const line of report) ctx.report(line);
   void v3;
 }

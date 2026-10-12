@@ -784,6 +784,25 @@ export function planesOfPoints(points, convexHull3, grow = 0) {
 }
 
 /**
+ * glslConvex's clip with its half-spaces in a uniform table (perf/gl-light-uniforms): `bool <name>(o, d, out p, out n,
+ * out span)` over `table`[0 … count) (n, d), kit metres; the same p, n and span. The loop's bound is the table's size
+ * (WebGL 1 loops are constant) and it ends early at `count`, a uniform; a plane past the count adds nothing anyway.
+ */
+export function glslTableHull(name, table, count, size) {
+  return `
+bool ${name}(vec3 o,vec3 d,out vec3 p,out vec3 n,out float span){
+  float tin=-1e9;float tout=1e9;bool any=false;n=vec3(0.,0.,1.);
+  for(int k=0;k<${size};k++){
+    if(float(k)>=${count})break;
+    vec4 P=${table}[k];float den=dot(d,P.xyz);float num=P.w-dot(o,P.xyz);
+    if(den>1e-7){float t=num/den;if(t<tout){tout=t;any=true;n=P.xyz;}}else if(den<-1e-7){tin=max(tin,num/den);}else if(num<0.){tin=1e9;}
+  }
+  span=tout-tin;p=o+tout*d;
+  return any&&tin<1e8;
+}`;
+}
+
+/**
  * The ray's span through a convex polyhedron (half-spaces in kit metres): `bool <name>(o, d, out p, out n,
  * out span)`. p is the exit point (largest t: the surface nearest the viewer), n the face it leaves through,
  * span = tout − tin (> 0 inside the silhouette, < 0 outside, continuous across it: span/FW(span) is a
@@ -862,73 +881,96 @@ ${body.join("\n")}
 }
 
 /**
- * One window-bearing part (DESIGN §6.2): its hull (the part's own faces), its window rows and its doorways.
- * rows: [{ id, z (row centre), xs (stations, kit m), side (0 both, ±1), w, h, r, pitch }];
- * doors: [{ slot (0..19 into uDoors), x, z (centre), hw, hh, r, side, cargo }].
- * Returns `vec4 <name>(o, d, level)`: dark glow or paper ink, x facing; the window rectangles live in each
+ * The window-bearing parts (DESIGN §6.2), one program for all of them (perf/gl-light-uniforms): each part is a pass
+ * whose hull, window rows and doorways come in as uniform tables (windowPartData), not as constants in the source. The
+ * baked form was a function per part (its planes, nearest-station trees, rows and doorways unrolled as literals), 19
+ * functions in 11 programs of 18-34 KB; with the tables the program is one of about 10 KB, compiled once, and both themes
+ * compile the same source. The arithmetic is the baked form's, term for term: a missing row, blind or doorway is a
+ * table entry that adds nothing (near 0, a blind at index −100, a doorway shut).
+ *   uWP[N.planes]   the hull's half-spaces (n, d), kit metres; uWI.x their count, uWI.yz the part's x range
+ *   uWR[2 N.rows]   per row (z, w/2, h/2, r), (pitch, side 0|±1, id·7, j·17+3); a missing row sits at z 1e4
+ *   uWX[N.xs]       per station c, both rows: (midpoint below it, station) of row 0, then of row 1; padding at 1e9
+ *   uWB[N.blinds]   per blind, both rows: (index, side) of row 0, then of row 1; padding (−100, 0)
+ *   uWDA/uWDB/uWDC[N.doors]  per doorway (x, σ centre, hw, hσ), (r, band share, cargo 0|1, side), (σ at the first
+ *                   breakpoint, open: the page's door channel, set each frame); a missing one is shut
+ *   uWG[N.doors·N.sig]  each doorway's σ(z) segments (z, length, slope); padding of length 0
+ * Returns `vec4 <name>(o, d, level, cargo)`: dark glow or paper ink, x facing; the window rectangles live in each
  * hit facet's own frame (u along it, v the ring edge, as W.facetFrame), so they sit on the true surface.
  */
 /** A closed blind's luminance in the windows program (lit from behind; 1 is a lit pane's rim, about 1.12 its core). */
 export const BLIND_LUM = 0.1;
-export function glslWindowPart(name, { planes, rows, doors, xr = null }, inks) {
-  const hit = glslConvex(`${name}Hit`, planes);
-  const nears = rows.map((row, j) => glslNearest(`${name}N${j}`, row.xs)).join("\n");
+/** The windows program's table sizes (the same in both themes; windowPartData throws for a part that does not fit). */
+export const WIN_N = { planes: 72, rows: 2, xs: 20, blinds: 4, doors: 4, sig: 8 };
+export function glslWindowPart(name, N, inks) {
   // Every fwidth() below runs in uniform control flow: no early return and no branch around it, because
-  // derivatives after a divergent branch are undefined (SwiftShader returned a different picture each draw).
-  const rowCode = rows
-    .map(
-      (row, j) => `
-  {float i;float xi=${name}N${j}(p.x,i);
-    vec3 D=vec3(p.x-xi,0.,p.z-${f(row.z)});D.y=-(n.x*D.x+n.z*D.z)/ny;
+  // derivatives after a divergent branch are undefined (SwiftShader returned a different picture each draw). The loops
+  // have constant bounds (WebGL 1) and every table index is a loop index; the plane loop's early exit is on a uniform.
+  const rowCode = Array.from({ length: N.rows }, (_, j) => {
+    const [mid, x] = j ? ["z", "w"] : ["x", "y"];
+    const [bk, bs] = j ? ["z", "w"] : ["x", "y"];
+    return `
+  {vec4 R=uWR[${2 * j}];vec4 Q=uWR[${2 * j + 1}];
+    // the nearest station (the baked form's balanced if-tree: the upper one from each midpoint on)
+    float i=0.;float xi=uWX[0].${x};
+    for(int c=1;c<${N.xs};c++){vec4 X=uWX[c];if(p.x>=X.${mid}){i=float(c);xi=X.${x};}}
+    vec3 D=vec3(p.x-xi,0.,p.z-R.x);D.y=-(n.x*D.x+n.z*D.z)/ny;
     vec2 q=vec2(dot(D,u),dot(D,v));
-    float dd=sdRoundRect(q,${v2([row.w / 2, row.h / 2])},${f(row.r)});
+    float dd=sdRoundRect(q,R.yz,R.w);
     float sharp=1.-smoothstep(-.5,.5,dd/FW(dd));
-    float band=1.-smoothstep(-.5,.5,(abs(q.y)-${f(row.h / 2)})/FW(q.y));
-    float fine=smoothstep(.3,.5,1./(pxPerM*${f(row.pitch)}));
-    float near=${row.side ? `step(0.,side*${f(row.side)})` : "1."}*(1.-step(${f(row.h / 2 + 0.7)},abs(p.z-${f(row.z)})));
-    float c=mix(sharp,band*${f(row.w / row.pitch)},fine)*near;
+    float band=1.-smoothstep(-.5,.5,(abs(q.y)-R.z)/FW(q.y));
+    float fine=smoothstep(.3,.5,1./(pxPerM*Q.x));
+    float near=mix(1.,step(0.,side*Q.y),abs(Q.y))*(1.-step(R.z+.7,abs(p.z-R.x)));
+    float c=mix(sharp,band*(2.*R.y/Q.x),fine)*near;
     // the blinds are the fallback's (W.windowBlind, review round 3); the per-window shade varies 10%, not 26% (runs of
     // dimmer windows read as a whole piece losing its glow)
     // (uCabin.z the blinds channel, model.mjs: 1 at the stand, 0 all open from the pushback on, for take-off and landing)
-    float blind=1.-(1.-1.${(row.blinds ?? []).map(([k, sd]) => `*(1.-(1.-step(.5,abs(i-${f(k)})))*step(0.,side*${f(sd)}))`).join("")})*uCabin.z;
+    float shut=1.;
+    for(int b=0;b<${N.blinds};b++){vec4 B=uWB[b];shut*=1.-(1.-step(.5,abs(i-B.${bk})))*step(0.,side*B.${bs});}
+    float blind=1.-(1.-shut)*uCabin.z;
     // fu/r2-lights: a closed blind is a dim pane lit from behind (lum .1, flat), not a hole: black, it read darker than
     // the card (luminance 11 against 19, the skin 56)
-    float shade=(.9+.1*hash12(vec2(i+${f(row.id * 7)},${f(j * 17 + 3)}+side*31.)))*mix(${f(BLIND_LUM)},1.,blind);
+    float shade=(.9+.1*hash12(vec2(i+Q.z,Q.w+side*31.)))*mix(${f(BLIND_LUM)},1.,blind);
     float hot=mix(mix(1.,.62+.5*smoothstep(0.,-.03,dd),blind),.86,fine)*mix(shade,.8,fine);
     lum=mix(lum,hot,c);cov=max(cov,c);shutC=max(shutC,c*(1.-blind));
-    halo+=near*(exp(-max(dd,0.)/.14)*(1.-smoothstep(.3,.55,dd))*shade*(1.-fine)+fine*band*.35)*(1.-smoothstep(.3,.55,abs(q.y)-${f(row.h / 2)}));
-  }`,
-    )
-    .join("");
+    halo+=near*(exp(-max(dd,0.)/.14)*(1.-smoothstep(.3,.55,dd))*shade*(1.-fine)+fine*band*.35)*(1.-smoothstep(.3,.55,abs(q.y)-R.z));
+  }`;
+  }).join("");
   // review fu-1: each opening in (x, σ) as skin.mjs cuts it (σ the section's arc length, piecewise linear in z on the
   // facets: dw.sig's breakpoints), so the ceiling never stands above the skin's opening; the carpet and ceiling planes are
   // the skin's 0.3 m bands (dw.band, inset)
-  const sigOf = (pts) => pts.slice(1).reduce((e, q, i) => `${e}+clamp(p.z-${f(pts[i][0])},0.,${f(q[0] - pts[i][0])})*${f((q[1] - pts[i][1]) / (q[0] - pts[i][0]))}`, f(pts[0][1]));
-  const doorCode = doors
-    .map((dw) => {
-      const fF = dw.band / (2 * dw.hs);
-      return `
-  {float open=uDoors[${Math.floor(dw.slot / 4)}].${"xyzw"[dw.slot % 4]}*step(0.,side*${f(dw.side)});
-   float sg=${sigOf(dw.sig)};
-   float dd=sdRoundRect(vec2(p.x-${f(dw.x)},sg-${f(dw.s)}),${v2([dw.hw, dw.hs])},${f(dw.r)});
+  const doorCode = `
+  for(int k=0;k<${N.doors};k++){
+   vec4 A=uWDA[k];vec4 B=uWDB[k];vec4 C=uWDC[k];
+   float open=C.y*step(0.,side*B.w);
+   float sg=C.x;
+   for(int g=0;g<${N.sig};g++){vec4 S=uWG[k*${N.sig}+g];sg+=clamp(p.z-S.x,0.,S.y)*S.z;}
+   float dd=sdRoundRect(vec2(p.x-A.x,sg-A.y),A.zw,B.x);
    float c=(1.-smoothstep(-.5,.5,dd/FW(dd)))*open;
    // the cabin beyond the opening, plane by plane (not one vertical gradient): the carpet dark (.35) with the sill's
    // edge, the galley face at the warm peak, the ceiling at .8; the far jamb's face (the one the reader sees) lit, the
    // near edge in the near jamb's shade
-   float up=clamp((sg-${f(dw.s)})/${f(2 * dw.hs)}+.5,0.,1.);
-   float jw=clamp(.2*abs(d.x)/max(abs(d.y),.25),.03,${f(dw.hw * 0.5)});
-   float sx=(p.x-${f(dw.x)})*(d.x>=0.?1.:-1.);
-   float tone=up<${f(fF)}?.35:(up<${f(1 - fF)}?1.:.8);
-   tone*=1.-.55*(1.-smoothstep(.0,.035,abs(up-${f(fF)})));
-   float far=1.-smoothstep(-${f(dw.hw)}+jw-.02,-${f(dw.hw)}+jw+.02,sx);
-   float nearS=smoothstep(${f(dw.hw)}-.18,${f(dw.hw)}-.02,sx);
+   float fF=B.y;
+   float up=clamp((sg-A.y)/(2.*A.w)+.5,0.,1.);
+   float jw=clamp(.2*abs(d.x)/max(abs(d.y),.25),.03,A.z*.5);
+   float sx=(p.x-A.x)*(d.x>=0.?1.:-1.);
+   float tone=up<fF?.35:(up<1.-fF?1.:.8);
+   tone*=1.-.55*(1.-smoothstep(.0,.035,abs(up-fF)));
+   float far=1.-smoothstep(-A.z+jw-.02,-A.z+jw+.02,sx);
+   float nearS=smoothstep(A.z-.18,A.z-.02,sx);
    tone=mix(tone,.9,far)*(1.-.6*nearS);
-   float deep=${dw.cargo ? ".52" : ".8"}*tone;
-   dlum=mix(dlum,deep,c);dcov=max(dcov,c);dcargo=max(dcargo,c*${dw.cargo ? "1." : "0."});dceil=max(dceil,c*smoothstep(${f(1 - fF)},${f(1 - fF + 0.06)},up)*(1.-far));}`;
-    })
-    .join("");
-  return `${hit}
-${nears}
+   float deep=(B.z>.5?.52:.8)*tone;
+   dlum=mix(dlum,deep,c);dcov=max(dcov,c);dcargo=max(dcargo,c*B.z);dceil=max(dceil,c*smoothstep(1.-fF,1.-fF+.06,up)*(1.-far));}`;
+  return `
+uniform vec4 uWP[${N.planes}];
+uniform vec4 uWI;
+uniform vec4 uWR[${2 * N.rows}];
+uniform vec4 uWX[${N.xs}];
+uniform vec4 uWB[${N.blinds}];
+uniform vec4 uWDA[${N.doors}];
+uniform vec4 uWDB[${N.doors}];
+uniform vec4 uWDC[${N.doors}];
+uniform vec4 uWG[${N.doors * N.sig}];
+${glslTableHull(`${name}Hit`, "uWP", "uWI.x", N.planes)}
 vec4 ${name}(vec3 o,vec3 d,float level,float cargo){
   vec3 p;vec3 n;float span;
   bool hit=${name}Hit(o,d,p,n,span);
@@ -936,7 +978,7 @@ vec4 ${name}(vec3 o,vec3 d,float level,float cargo){
   float side=p.y>=0.?1.:-1.;
   // the outer skin only: a strip's inner face (seen through the lifted crown) carries no windows
   float keep=(hit?1.:0.)*step(0.,span)*smoothstep(.04,.3,dot(n,d))*step(.25,n.y*side);
-  ${xr ? `keep*=smoothstep(${f(xr[0] + 0.005)},${f(xr[0] + 0.025)},p.x)*(1.-smoothstep(${f(xr[1] - 0.025)},${f(xr[1] - 0.005)},p.x));` : ""}
+  keep*=smoothstep(uWI.y+.005,uWI.y+.025,p.x)*(1.-smoothstep(uWI.z-.025,uWI.z-.005,p.x));
   float ny=side*max(abs(n.y),.25);
   vec3 v=normalize(vec3(0.,n.z,-ny));v*=sign(v.z+1e-6);
   vec3 u=normalize(cross(v,n));
@@ -975,6 +1017,88 @@ ${doorCode}
   paper=over(tintInk(dl*dceil*1.2,${inkU("door")},.13)*dl,paper);
   return mix(dark,paper,uLight)*keep;
 }`;
+}
+
+/**
+ * One window-bearing part's tables for glslWindowPart (the page sets them on its pass): { planes, rows, doors, xr } as
+ * the baked form took them (rows: [{ id, z, xs (sorted, kit m), side, w, h, r, pitch, blinds: [[k, side]] }]; doors:
+ * [{ slot (0..19 into the page's door channels), x, s, hw, hs, r, band, side, cargo, sig: [[z, σ]] }]). Numbers to 7
+ * significant digits (float32 holds them; the baked literals had 5 decimals). `slots` lists each doorway's channel, for
+ * uWDC's open term; uWDC's σ terms are in `sig0`.
+ */
+export function windowPartData({ planes, rows, doors, xr }, N = WIN_N, part = "?") {
+  const over = (what, n, max) => {
+    if (n > max) throw new Error(`gl-shaders: window part ${part} has ${n} ${what}, the windows program holds ${max} (WIN_N)`);
+  };
+  over("planes", planes.length, N.planes);
+  over("rows", rows.length, N.rows);
+  const r7 = (x) => {
+    if (!Number.isFinite(x)) throw new Error(`gl-shaders: non-finite window table value ${x} (${part})`);
+    return +x.toPrecision(7);
+  };
+  const uWP = [];
+  for (let k = 0; k < N.planes; k++) uWP.push(...(planes[k] ? [...planes[k].n, planes[k].d] : [0, 0, 0, 1]));
+  const uWR = [];
+  const uWX = new Array(4 * N.xs).fill(0);
+  const uWB = new Array(4 * N.blinds).fill(0);
+  for (let j = 0; j < N.rows; j++) {
+    const row = rows[j];
+    for (let c = 0; c < N.xs; c++) {
+      uWX[4 * c + 2 * j] = 1e9;
+      uWX[4 * c + 2 * j + 1] = 0;
+    }
+    for (let b = 0; b < N.blinds; b++) {
+      uWB[4 * b + 2 * j] = -100;
+      uWB[4 * b + 2 * j + 1] = 0;
+    }
+    if (!row) {
+      // a missing row: far from every fragment (near 0), with a pitch and size that keep its terms finite
+      uWR.push(1e4, 0.2, 0.2, 0.07, 1, 0, 0, 0);
+      continue;
+    }
+    const xs = row.xs.slice().sort((a, b) => a - b);
+    over("stations in a row", xs.length, N.xs);
+    over("blinds in a row", (row.blinds ?? []).length, N.blinds);
+    uWR.push(row.z, row.w / 2, row.h / 2, row.r, row.pitch, row.side, row.id * 7, j * 17 + 3);
+    xs.forEach((x, c) => {
+      uWX[4 * c + 2 * j] = c ? (xs[c - 1] + x) / 2 : -1e9;
+      uWX[4 * c + 2 * j + 1] = x;
+    });
+    (row.blinds ?? []).forEach(([k, sd], b) => {
+      uWB[4 * b + 2 * j] = k;
+      uWB[4 * b + 2 * j + 1] = sd;
+    });
+  }
+  over("doorways", doors.length, N.doors);
+  const uWDA = [];
+  const uWDB = [];
+  const uWG = [];
+  const slots = [];
+  const sig0 = [];
+  for (let k = 0; k < N.doors; k++) {
+    const dw = doors[k];
+    if (!dw) {
+      // a missing doorway: shut (open 0), with a size that keeps its terms finite
+      uWDA.push(0, 0, 1, 1);
+      uWDB.push(0.1, 0.1, 0, 1);
+      for (let g = 0; g < N.sig; g++) uWG.push(0, 0, 0, 0);
+      slots.push(-1);
+      sig0.push(0);
+      continue;
+    }
+    over("σ segments in a doorway", dw.sig.length - 1, N.sig);
+    uWDA.push(dw.x, dw.s, dw.hw, dw.hs);
+    uWDB.push(dw.r, dw.band / (2 * dw.hs), dw.cargo ? 1 : 0, dw.side);
+    for (let g = 0; g < N.sig; g++) {
+      const a = dw.sig[g];
+      const b = dw.sig[g + 1];
+      uWG.push(...(a && b ? [a[0], b[0] - a[0], (b[1] - a[1]) / (b[0] - a[0]), 0] : [0, 0, 0, 0]));
+    }
+    slots.push(dw.slot);
+    sig0.push(dw.sig[0][1]);
+  }
+  const R = (list) => list.map(r7);
+  return { uWP: R(uWP), uWI: R([planes.length, xr ? xr[0] : -1e4, xr ? xr[1] : 1e4, 0]), uWR: R(uWR), uWX: R(uWX), uWB: R(uWB), uWDA: R(uWDA), uWDB: R(uWDB), uWG: R(uWG), slots, sig0: R(sig0) };
 }
 
 /**
@@ -1134,51 +1258,81 @@ ${lifted}
 /**
  * A surface washed by lamps fixed on the airframe or a flap (DESIGN §6.2: logo on the fin, wing and engine
  * scan). Lamps come as uniforms in world kit units (uWS position, uWD direction, uWC = cos outer, cos inner,
- * power x envelope, reach m); `slots` lists the lamps that can reach this target. hull: half-spaces;
- * cone: { c, a, u, v, s0, s1, r0, r1 } kit metres (a nacelle row). `vec4 <name>(o, d)`: ink ending at the
- * outline stroke's inner edge, facing-correct, tinted (dark: glow; paper: tint capped at `cap`).
+ * power x envelope, reach m). One program for every target (perf/gl-light-uniforms): each target is a pass whose
+ * surface and colours come in as uniform tables (washTargetData), not as constants in the source (the baked form, a
+ * function per target, filled 6 programs of 27-32 KB; the logo's daylight cap differed between the themes):
+ *   uXP[N.planes]  a hull's half-spaces (n, d), kit metres; uXI.x their count, uXI.y the kind (0 hull, 1 cone)
+ *   uXC[4]         a cone (a nacelle row): (c, r0 − k s0), (u, k), (v, s0), (a, s1), kit metres
+ *   uXK            (logo 0|1, cap, paper gain, 0): the logo lamps (slots 0, 1) and the logo ink, laid by daylight as a
+ *                  multiply-like tint; else the scan lamps (slots 2-5) and the scan ink, a capped tint
+ * `vec4 <name>(o, d)`: ink ending at the outline stroke's inner edge, facing-correct, tinted (dark: glow; paper: tint
+ * capped at `cap`).
  */
-export function glslWash(name, target, slots, colours) {
-  const lamps = slots
-    .map((k) => `  {vec4 C=uWC[${k}];if(C.z>0.){vec3 S=toG(uWS[${k}])*${f(KM)};vec3 D=normalize(dirToG(uWD[${k}]));e+=spotAt(p,n,S,D,C);}}`)
-    .join("\n");
-  let surface;
-  if (target.hull) {
-    surface = `${glslConvex(`${name}Hit`, target.hull)}
-float ${name}Surf(vec3 o,vec3 d,out vec3 p,out vec3 n){float span;bool h=${name}Hit(o,d,p,n,span);span=max(span,-1e3);return (h?1.:0.)*smoothstep(-.5,.5,span/FW(span)-strokePx())*smoothstep(.0,.12,dot(n,d));}`;
-  } else {
-    const c = target.cone;
-    const k = (c.r1 - c.r0) / (c.s1 - c.s0);
-    surface = `
+export const WASH_N = { planes: 36 };
+export function glslWash(name, N = WASH_N) {
+  return `
+uniform vec4 uXP[${N.planes}];
+uniform vec4 uXI;
+uniform vec4 uXC[4];
+uniform vec4 uXK;
+${glslTableHull(`${name}Hit`, "uXP", "uXI.x", N.planes)}
 float ${name}Surf(vec3 o,vec3 d,out vec3 p,out vec3 n){
-  vec3 q=o-${v3(c.c)};vec3 Q=vec3(dot(q,${v3(c.u)}),dot(q,${v3(c.v)}),dot(q,${v3(c.a)}));vec3 E=vec3(dot(d,${v3(c.u)}),dot(d,${v3(c.v)}),dot(d,${v3(c.a)}));
-  float r0=${f(c.r0 - k * c.s0)};float k=${f(k)};
+  p=o;n=vec3(0.,0.,1.);
+  // the kind is a uniform, so either branch is uniform control flow for its fwidth()
+  if(uXI.y<.5){float span;bool h=${name}Hit(o,d,p,n,span);span=max(span,-1e3);return (h?1.:0.)*smoothstep(-.5,.5,span/FW(span)-strokePx())*smoothstep(.0,.12,dot(n,d));}
+  vec3 c=uXC[0].xyz;float r0=uXC[0].w;vec3 cu=uXC[1].xyz;float k=uXC[1].w;vec3 cv=uXC[2].xyz;float s0=uXC[2].w;vec3 ca=uXC[3].xyz;float s1=uXC[3].w;
+  vec3 q=o-c;vec3 Q=vec3(dot(q,cu),dot(q,cv),dot(q,ca));vec3 E=vec3(dot(d,cu),dot(d,cv),dot(d,ca));
   float A=E.x*E.x+E.y*E.y-k*k*E.z*E.z;float B=Q.x*E.x+Q.y*E.y-k*(r0+k*Q.z)*E.z;float Cq=Q.x*Q.x+Q.y*Q.y-(r0+k*Q.z)*(r0+k*Q.z);
-  float h=B*B-A*Cq;p=o;n=vec3(0.,0.,1.);
+  float h=B*B-A*Cq;
   if(abs(A)<1e-8)return 0.;
   float sq=sqrt(max(h,0.));float t=(-B+sq)/A;float t2=(-B-sq)/A;if(t2>t){float x=t;t=t2;t2=x;}
   float s=Q.z+t*E.z;
   p=o+t*d;vec3 L=Q+t*E;vec3 nl=normalize(vec3(L.x,L.y,-k*(r0+k*L.z)));
-  n=nl.x*${v3(c.u)}+nl.y*${v3(c.v)}+nl.z*${v3(c.a)};
+  n=nl.x*cu+nl.y*cv+nl.z*ca;
   float rim=smoothstep(-.5,.5,h/FW(h)-strokePx());
-  float ends=smoothstep(-.5,.5,(s-${f(c.s0)})/FW(s)-strokePx())*smoothstep(-.5,.5,(${f(c.s1)}-s)/FW(s)-strokePx());
+  float ends=smoothstep(-.5,.5,(s-s0)/FW(s)-strokePx())*smoothstep(-.5,.5,(s1-s)/FW(s)-strokePx());
   return rim*ends*step(0.,h)*smoothstep(.0,.12,dot(n,d));
-}`;
-  }
-  return `${surface}
+}
 vec4 ${name}(vec3 o,vec3 d){
   vec3 p;vec3 n;float cov=${name}Surf(o,d,p,n);
   if(cov<=0.)return vec4(0.);
+  bool logo=uXK.x>.5;
   float e=0.;
-${lamps}
+  for(int k=0;k<6;k++){
+    if(logo?k>1:k<2)continue;
+    vec4 C=uWC[k];if(C.z>0.){vec3 S=toG(uWS[k])*${f(KM)};vec3 D=normalize(dirToG(uWD[k]));e+=spotAt(p,n,S,D,C);}
+  }
   e*=cov;
-  vec4 dark=glowOf(${v3(colours.dark)}*e);
-  ${colours.mul ? `// a multiply-like tint (review round 3): the face's own grey pulled warm, its cover tonemapped from the lamps' energy
-  // so the wash falls off with height (a yellow over the blue-grey paint read as an olive slab at its cap)
-  float wa=${f(colours.cap)}*(1.-exp(-${f(colours.paperGain ?? 1)}*e));
-  vec4 paper=vec4(${v3(colours.mul)}*wa,wa);` : `vec4 paper=tintInk(e*${f(colours.paperGain ?? 1)},${v3(colours.tint)},${f(colours.cap)});`}
+  vec4 dark=glowOf((logo?${inkU("logo")}:${inkU("scan")})*e);
+  // the logo by daylight: a multiply-like tint (review round 3): the face's own grey pulled warm, its cover tonemapped
+  // from the lamps' energy so the wash falls off with height (a yellow over the blue-grey paint read as an olive slab at
+  // its cap); the scan: a capped tint
+  float wa=uXK.y*(1.-exp(-uXK.z*e));
+  vec4 paper=logo?vec4(${inkU("logo")}*wa,wa):tintInk(e*uXK.z,${inkU("scan")},uXK.y);
   return mix(dark,paper,uLight);
 }`;
+}
+
+/** A wash target's tables for glslWash (the page sets them on its pass): target { hull } or { cone }, colours as
+ *  lights.mjs gives them ({ logo, cap, paperGain }). Numbers to 7 significant digits. */
+export function washTargetData(target, { logo, cap, paperGain = 1 }, N = WASH_N, part = "?") {
+  const r7 = (x) => {
+    if (!Number.isFinite(x)) throw new Error(`gl-shaders: non-finite wash table value ${x} (${part})`);
+    return +x.toPrecision(7);
+  };
+  const uXP = [];
+  const uXC = new Array(16).fill(0);
+  let count = 0;
+  if (target.hull) {
+    if (target.hull.length > N.planes) throw new Error(`gl-shaders: wash target ${part} has ${target.hull.length} planes, the washes program holds ${N.planes} (WASH_N)`);
+    count = target.hull.length;
+  } else {
+    const c = target.cone;
+    const k = (c.r1 - c.r0) / (c.s1 - c.s0);
+    uXC.splice(0, 16, ...c.c, c.r0 - k * c.s0, ...c.u, k, ...c.v, c.s0, ...c.a, c.s1);
+  }
+  for (let i = 0; i < N.planes; i++) uXP.push(...(target.hull && target.hull[i] ? [...target.hull[i].n, target.hull[i].d] : [0, 0, 0, 1]));
+  return { uXP: uXP.map(r7), uXI: [count, target.hull ? 0 : 1, 0, 0], uXC: uXC.map(r7), uXK: [logo ? 1 : 0, cap, paperGain, 0].map(r7) };
 }
 
 /**
