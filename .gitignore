@@ -5,3 +5,6 @@ a380/dist/
 a380/*-verify.html
 *.log
 .env
+# the built single-file pages (npm run build); releases carry them
+a380/a380.html
+a380/a380-light.html

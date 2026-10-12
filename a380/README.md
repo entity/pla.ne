@@ -7,7 +7,8 @@ self-contained HTML page with no network requests:
 - `a380/a380.html`: dark theme (night, the lights carry the picture);
 - `a380/a380-light.html`: light theme (daylight; lenses read as glints, no bloom).
 
-Both are written by `node a380/build.mjs` and work offline. The hosted site (`a380/tools/build-site.mjs`, see Host
+Both are written by `node a380/build.mjs` (`npm run build`) and work offline. They are not kept in git; each GitHub
+release carries them. The hosted site (`a380/tools/build-site.mjs`, see Host
 below) is one page, `index.html`, with a System / Light / Dark switch that swaps the theme in place. Every size, rate and rule comes from `a380/model.mjs`, which is sourced
 in `a380/truth.md` (Airbus airport-planning drawings, EASA type certificates, Airbus Safety First and the other
 sources listed there). Numbers marked as estimates in the truth sheet are engineering estimates.

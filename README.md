@@ -14,8 +14,9 @@ self-contained web page.
 
 ## Try it
 
-Open `a380/a380.html` (dark) or `a380/a380-light.html` (light) in a browser. Each page is a single file with no
-network requests, for use offline. The hosted site (`node a380/tools/build-site.mjs`) is one page, `index.html`, with a
+The live site is https://air.pla.ne. For use offline, download `a380.html` (dark) or `a380-light.html` (light) from
+the [latest release](https://github.com/entity/pla.ne/releases/latest), or build them with `npm run build`. Each page is
+a single file with no network requests. The hosted site (`node a380/tools/build-site.mjs`) is one page, `index.html`, with a
 System / Light / Dark switch that changes the theme in place without losing the flight, the view or the turntable.
 
 Controls: drag to turn · `1`–`7` flight phases · `C` cutaway · `D` doors · `I` / `Shift+I` close-up views ·
