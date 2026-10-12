@@ -7,7 +7,8 @@ self-contained HTML page with no network requests:
 - `a380/a380.html`: dark theme (night, the lights carry the picture);
 - `a380/a380-light.html`: light theme (daylight; lenses read as glints, no bloom).
 
-Both are written by `node a380/build.mjs`. Every size, rate and rule comes from `a380/model.mjs`, which is sourced
+Both are written by `node a380/build.mjs` and work offline. The hosted site (`a380/tools/build-site.mjs`, see Host
+below) is one page, `index.html`, with a System / Light / Dark switch that swaps the theme in place. Every size, rate and rule comes from `a380/model.mjs`, which is sourced
 in `a380/truth.md` (Airbus airport-planning drawings, EASA type certificates, Airbus Safety First and the other
 sources listed there). Numbers marked as estimates in the truth sheet are engineering estimates.
 
@@ -248,7 +249,7 @@ node a380/tools/lines-sites.mjs a380/a380-verify.html       # fu/f3-verify: that
                                                             # with what each could meet and a 4x crop (<out>/sites.md)
 node scripts/devices.mjs a380/a380.html                     # fu/f3-verify: phones to desktops (--list): frame times,
                                                             # a drag, taps, layout faults, one shot each
-node scripts/devices.mjs http://127.0.0.1:8741/a380/a380.html --site   # fu/f4-verify: the hosted site (dist/ served by
+node scripts/devices.mjs http://127.0.0.1:8741/a380/ --site   # fu/f4-verify: the hosted site (dist/ served by
                                                             # serve-site.mjs): also every link and button inside the viewport
 node scripts/lines.mjs a380/a380.html --wait 4000          # the deck's SVG lines only (the airframe is painted on a canvas)
 node scripts/turn-check.mjs a380/a380.html --perf --width 1440 --state all
@@ -289,13 +290,37 @@ stage says which one draws). `node a380/tools/gl-parity.mjs <page>` compares the
 ## Host
 
 `node a380/tools/build-site.mjs [--rebuild] [--url https://<domain>/<path>/]` writes the deployable static site to
-`a380/dist/` (ignored): an `index.html` that picks the theme (stored choice, `?theme=`, then the system's), both figure
-pages (byte for byte plus meta, Open Graph and Twitter tags, a remembered Dark | Light toggle, a Credits link, and the
-no-JavaScript and no-WebGL notes), `credits.html` (not affiliated with Airbus; the kit's MIT licence; the sources),
-`404.html`, hashed icons and link-card images, `robots.txt`, `_headers` and `vercel.json`. It loads from any subpath.
+`a380/dist/` (ignored). Its single entry is `index.html`: the figure itself, with meta, Open Graph and Twitter tags,
+the no-JavaScript and no-WebGL notes, and a site bar under the figure with the theme switch (System, Light, Dark;
+System by default, remembered in `localStorage`, `?theme=system|light|dark` sets it) and a Credits link. Beside it:
+`credits.html` (not affiliated with Airbus; the kit's MIT licence; the sources), `404.html`, `robots.txt`, `_headers`,
+`vercel.json`, and `assets/` with content-hashed names. It loads from any subpath.
 `a380/site/DEPLOY.md` covers Cloudflare Pages, Netlify, Vercel, GitHub Pages and plain servers, with the cache,
 compression and CSP headers; `node a380/tools/serve-site.mjs` serves `dist/` on localhost for a check and
 `a380/tools/site-check.mjs` times a cold load. The figure's own licence is for the owner to state.
+
+### The theme switch
+
+The two themes are not two colourings of one scene: the light build has its own parts and order data (`data.turn`
+differs: daylight glints, extra lens classes, other plane bins), its own markup (the deck layer is 114 KB smaller),
+its own shaders and uniforms (`gl`: 424 lines differ, e.g. the haze effect's 13 uniforms against 9) and its own vary
+functions and M8 settings. Turning that into runtime tokens and uniforms would mean rebuilding both scenes as one, so
+the switch keeps the build-time themes and splits what differs from what does not:
+
+- **the runtime** (`runtime-shell.js` around the kit, `model.mjs`, `follow.mjs`, the GL page files and `live.js`) is
+  the same byte for byte in both builds (build-site checks it): `assets/a380-runtime.<hash>.js`;
+- **a theme** is a small script, its DATA as a factory over the runtime's names (`assets/a380-dark.<hash>.js`), and a
+  JSON payload: the live layers' markup, the turn data and the GL data (`assets/a380-dark.<hash>.json`).
+
+`index.html` picks the theme in `<head>` before first paint (the stored choice, else the system's), preloads that
+theme only, and prefetches the other at idle once the first one's lights are up. A switch, or on System a change of
+the system's scheme while the page is open, takes the figure's state (`A3.snapshot()`: the model and the reader's
+overrides, the phase, a seek, the tour, the pause, the turntable and its inertia, Inspect and a view change in
+flight, the cutaway, the doors, the flaps lever, the lights, an armed action, the idle timer), stops the figure (its
+last frame stays on screen), boots the other theme in a fresh copy of the figure's markup from that state, and then
+removes the old one. `runtime-shell.js` tracks every frame callback, timer, document and media-query listener,
+observer and WebGL context a boot starts, so a stopped figure leaves nothing running. The standalone pages are the same
+runtime and one theme with the payload deflated inside, as before.
 
 ## Measured: the finished figure (2026-10-11, 22:52–23:45 UTC)
 
@@ -344,7 +369,7 @@ real phone (D8).
 ```sh
 node a380/tools/build-site.mjs --url https://<domain>/<path>/   # writes a380/dist/ from the shipping pages
 node a380/tools/serve-site.mjs --port <free port>               # look at it on localhost first
-node scripts/devices.mjs http://127.0.0.1:<port>/a380.html --site
+node scripts/devices.mjs http://127.0.0.1:<port>/ --site
 ```
 
 Then copy `a380/dist/` to the static host; `a380/site/DEPLOY.md` has the per-host steps and headers. Nothing in this

@@ -15,7 +15,8 @@ self-contained web page.
 ## Try it
 
 Open `a380/a380.html` (dark) or `a380/a380-light.html` (light) in a browser. Each page is a single file with no
-network requests.
+network requests, for use offline. The hosted site (`node a380/tools/build-site.mjs`) is one page, `index.html`, with a
+System / Light / Dark switch that changes the theme in place without losing the flight, the view or the turntable.
 
 Controls: drag to turn · `1`–`7` flight phases · `C` cutaway · `D` doors · `I` / `Shift+I` close-up views ·
 `Space` pause · `Esc` back. The full list is in [`a380/README.md`](a380/README.md).
@@ -28,7 +29,7 @@ Requires Node.js 20.10 or later; there is nothing to install.
 node a380/build.mjs                 # a380/a380.html
 node a380/build.mjs --light         # a380/a380-light.html
 node a380/build.mjs --check         # the figure's own checks
-node a380/tools/build-site.mjs      # a380/dist/: a static site ready to deploy (see a380/site/DEPLOY.md)
+node a380/tools/build-site.mjs      # a380/dist/: the one-page static site with the theme switch (a380/site/DEPLOY.md)
 ```
 
 The audits and browser checks (headless Chromium) are described in [`a380/README.md`](a380/README.md).

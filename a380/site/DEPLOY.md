@@ -26,11 +26,12 @@ What is in the folder:
 
 | File | What it is |
 |---|---|
-| `index.html` | Picks the theme (the visitor's stored choice, else `prefers-color-scheme`) and replaces itself with that page, keeping the rest of the query and the hash. `?theme=dark` or `?theme=light` forces and stores one. Without JavaScript it shows both links and a still. |
-| `a380.html`, `a380-light.html` | The figure, dark (night) and light (day). Each is one self-contained file. A bar under the figure and its caption switches theme (and remembers it, and keeps the query, e.g. `?quality=full`) and links to the credits. |
+| `index.html` | The figure itself: the single page a visitor opens. Its theme is picked in `<head>` before anything is painted: `?theme=system`, `light` or `dark` (stored, then taken off the address), else the visitor's stored choice, else System, which follows `prefers-color-scheme` (also when the system changes while the page is open). A switch under the figure (System, Light, Dark; radio buttons, keyboard and screen-reader accessible) changes the theme in place, keeping the flight, the turntable, Inspect, the cutaway, the doors, the pause and the tour. A Credits link sits beside it. Without JavaScript it shows a note and a still. |
+| `assets/a380-runtime.<hash>.js` | The figure's code, the same for both themes. |
+| `assets/a380-dark.<hash>.js`, `.json` and `assets/a380-light.<hash>.js`, `.json` | A theme: its data script and its payload (the drawing's markup, turn and WebGL data). The page loads the active theme only, then fetches the other at idle once the figure's lights are up, so a switch does not wait for the network. |
 | `credits.html` | Not affiliated with Airbus; trademarks; the Anatomy kit's MIT licence; the sources. |
 | `404.html` | The not-found page (Cloudflare Pages, Netlify and GitHub Pages serve it by name). |
-| `assets/` | Icons, the web manifest and the card images. Names carry a content hash, so they can be cached for a year. |
+| `assets/` | The above, icons, the web manifest and the card images. Names carry a content hash, so they can be cached for a year. |
 | `robots.txt`, `sitemap.xml` | Crawlers (the sitemap only with `--url`). |
 | `_headers` | Cache and security headers for Cloudflare Pages and Netlify. |
 | `vercel.json` | The same headers for Vercel. |
@@ -41,14 +42,16 @@ What is in the folder:
 | Path | Header | Why |
 |---|---|---|
 | `/assets/*` | `Cache-Control: public, max-age=31536000, immutable` | the names change when the content changes |
-| `*.html`, `/` | `Cache-Control: public, max-age=0, must-revalidate` | a new build shows at once; unchanged pages answer 304 |
+| `*.html`, `/` | `Cache-Control: public, max-age=0, must-revalidate` | a new build shows at once (it names new assets); unchanged pages answer 304 |
 | everything | `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin` | hygiene |
 | text files | `Content-Encoding: br` (or `gzip`) | the pages shrink to about 46% (brotli) or 49% (gzip) |
 
-**Compression matters most.** Each figure page is about 1.8 MB raw and about 0.83 MB with brotli. Every host below
-compresses HTML on its own; check that a response for `a380.html` carries `content-encoding: br` or `gzip`
-(`curl -sI -H 'Accept-Encoding: br, gzip' https://example.com/a380/a380.html`). Do not minify or re-encode the pages:
-they carry their data as base64 inside the HTML and their own source stamp.
+**Compression matters most.** A first visit loads `index.html`, the runtime and one theme: about 5.4 MB raw, about
+0.72 MB with brotli and 0.98 MB with gzip (the theme's JSON payload is 4.3–4.5 MB raw and 445–475 KB with brotli).
+Every host below compresses HTML, JavaScript and JSON on its own; check that a response for the payload carries
+`content-encoding: br` or `gzip` (`curl -sI -H 'Accept-Encoding: br, gzip' https://example.com/a380/assets/<the dark
+.json>`). Do not minify or re-encode the files: the page carries its own source stamp and the build checks the runtime
+is the same for both themes.
 
 **Under a subpath** the `_headers` and `vercel.json` patterns are relative to the deployed folder's root when the folder
 is the site's root. If the folder is served from a subpath of a larger site, prefix the patterns (`/a380/assets/*`).
@@ -87,22 +90,25 @@ try the folder locally the way a host serves it (subpath, compression, `_headers
 
 ```sh
 node a380/tools/serve-site.mjs --port 8741 --base /a380/     # http://127.0.0.1:8741/a380/
-node a380/tools/site-check.mjs --timing http://127.0.0.1:8741/a380/a380.html   # cold-load times, desktop and phone
-node a380/tools/site-check.mjs --nojs http://127.0.0.1:8741/a380/              # the pages with JavaScript off
-node a380/tools/site-check.mjs --layout http://127.0.0.1:8741/a380/            # the site bar on screen at 320 to 1440 px, 44 px
-                                                                               # touch links, the card not moved by the site layer
+node a380/tools/site-check.mjs --timing http://127.0.0.1:8741/a380/            # cold-load times, desktop and phone
+node a380/tools/site-check.mjs --nojs http://127.0.0.1:8741/a380/              # the page with JavaScript off
+node a380/tools/site-check.mjs --layout http://127.0.0.1:8741/a380/            # both themes: the switch and Credits on screen at
+                                                                               # 320 to 1440 px, 44 px touch targets, the card not
+                                                                               # moved by the site layer
 ```
 
 ## Before you publish
 
 - Build with `--url` set to the real address (build-site prints a WARNING when the link-preview image URLs are relative:
-  Facebook, Slack, X and LinkedIn need them absolute), and look at the two card images and at the pages in both themes.
+  Facebook, Slack, X and LinkedIn need them absolute), and look at the two card images and at the page in both themes
+  (the link preview uses the dark card).
 - Run `site-check.mjs --layout` and `--nojs` on the folder served by `serve-site.mjs`; both end `site-check: passed`.
 - The figure needs JavaScript (a message and a still show without it) and runs without WebGL (the lights are drawn more
-  simply; a note says so). It needs `DecompressionStream`: Chrome or Edge 80+, Firefox 113+, Safari 16.4+; older
-  browsers get a "could not start" note and the still.
-- The pages ask nothing of the network. If you set a Content-Security-Policy, allow their inline scripts and styles:
-  `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:`
-  (they use no `eval`, workers or remote origins).
+  simply; a note says so). It needs ES modules and `structuredClone`: current Chrome, Edge, Firefox and Safari 16.4+;
+  older browsers get a "could not start" note and the still. (The standalone pages also need `DecompressionStream`.)
+- The page asks nothing of other origins: it loads its own `assets/` (scripts with `import()`, the payloads with
+  `fetch`). If you set a Content-Security-Policy, allow its inline scripts and styles and same-origin fetches:
+  `default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:;
+  connect-src 'self'` (it uses no `eval`, workers or remote origins).
 - The credits page says the figure is not affiliated with Airbus. The figure's own licence (as opposed to the kit's) is
   for the owner to state.
