@@ -1108,7 +1108,7 @@ export function windowPartData({ planes, rows, doors, xr }, N = WIN_N, part = "?
  * x: [X0, X1] (kit m), inset }]. panel: { X (kit m, faces kit −x), half (y), displays: [{ y, z, w, h, kind }] }.
  * displays (lifted): [{ c, u, v, n (kit m, cockpit frame), w, h, kind }].
  */
-export function glslCockpit({ canopy, panes, panel, displays }, inks) {
+export function glslCockpit({ canopy, panes, panel, displays }, inks, constant = true) {
   const paneSd = panes.map((pane, i) => glslPolygonSd(`paneSd${i}`, pane.poly)).join("\n");
   // a display's picture: kind 0 PFD (sky over ground, horizon, speed and altitude tapes), 1 ND (compass arc,
   // route), 2 EWD (four N1 dials, memo lines), 3 SD (synoptic lines), 4 MFD (text rows). q in [-.5,.5]^2.
@@ -1175,10 +1175,12 @@ vec3 screenOf(float kind,vec2 q,float qp,out float lit){
     if(c>0.){float l;vec3 s=screenOf(${f(dp.kind)},g/${v2([dp.w, dp.h])},pixelOf()*${f(KM)}/${f(Math.min(dp.w, dp.h))}/max(dn,.15),l);col=mix(col,s,c);lit=mix(lit,l,c);cov=max(cov,c);}}}`,
     )
     .join("\n");
-  return `${glslConvex("canopyHit", canopy)}
+  // the build-constant passes (every pane on the canopy, every lifted display), baked: only the program that draws them
+  // carries them (perf/gl-light-uniforms: 27 of the registration-driven program's 42 KB were these, never called there)
+  const constantFns = `${glslConvex("canopyHit", canopy)}
 ${paneSd}
-${content}
-vec4 cockpitPanes(vec3 o,vec3 d,float level){
+`;
+  const panesFn = `vec4 cockpitPanes(vec3 o,vec3 d,float level){
   vec3 p;vec3 n;float span;
   bool hit=canopyHit(o,d,p,n,span);
   p=hit?p:o;
@@ -1198,7 +1200,18 @@ ${cells}
   vec4 paper=lampInk(1.7+1.6*disp,${v3(inks.cockpitRim)},${v3(inks.cockpitBody)},${v3(inks.cockpitCore)},.9)*level;
   return mix(dark,paper,uLight)*pane*face;
 }
-// registration-driven passes (one pane or one display per pass, from M2's and M7's glTargets): a planar
+`;
+  const displaysFn = `
+vec4 cockpitDisplays(vec3 o,vec3 d,float level){
+  vec3 col=vec3(0.);float lit=0.;float cov=0.;
+${lifted}
+  if(cov<=0.)return vec4(0.);
+  vec4 dark=glowOf(col*(.6+1.6*lit))*cov;
+  vec4 paper=inkFor(mix(${inkU("screen")},col,.35+.65*lit),.97)*cov;
+  return mix(dark,paper,uLight)*level;
+}`;
+  return `${constant ? constantFns : ""}${content}
+${constant ? panesFn : ""}// registration-driven passes (one pane or one display per pass, from M2's and M7's glTargets): a planar
 // polygon of up to 32 vertices in its own (u, v) frame, and a display rectangle with its picture
 uniform vec3 uPO;uniform vec3 uPU;uniform vec3 uPV;uniform vec3 uPN;
 uniform vec2 uPoly[32];
@@ -1245,14 +1258,7 @@ vec4 cockpitDisplayU(vec3 o,vec3 d,float level){
   vec4 paper=inkFor(mix(${inkU("screen")},col,.35+.65*lit),.97)*c;
   return mix(dark,paper,uLight)*level;
 }
-vec4 cockpitDisplays(vec3 o,vec3 d,float level){
-  vec3 col=vec3(0.);float lit=0.;float cov=0.;
-${lifted}
-  if(cov<=0.)return vec4(0.);
-  vec4 dark=glowOf(col*(.6+1.6*lit))*cov;
-  vec4 paper=inkFor(mix(${inkU("screen")},col,.35+.65*lit),.97)*cov;
-  return mix(dark,paper,uLight)*level;
-}`;
+${constant ? displaysFn : ""}`;
 }
 
 /**

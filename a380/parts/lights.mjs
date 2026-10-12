@@ -512,18 +512,17 @@ void main(){
   // two programs (follow-up item 34): the registration-driven passes the page draws (2: one pane, 3: one display; id
   // "cockpit", which the cabin's display fallback looks for) and the build-constant ones (0: every pane, 1: every
   // display) kept for a build without M2's or M7's targets; one program held both and took 160 ms to compile
-  const COCKPIT_GLSL = SH.glslCockpit({ canopy: SH.planesOfHull(canopy), panes, panel: deck.panel, displays: deck.displays }, SURF);
-  const cockpitOf = (call) => `${COMMON}${glslPose("G")}
+  const cockpitOf = (call, constant) => `${COMMON}${glslPose("G")}
 uniform vec4 uCk;
-${COCKPIT_GLSL}
+${SH.glslCockpit({ canopy: SH.planesOfHull(canopy), panes, panel: deck.panel, displays: deck.displays }, SURF, constant)}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toG(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToG(towardViewer()));
   vec4 ink=${call};
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
 }`;
-  const COCKPIT = cockpitOf("uPass<2.5?cockpitPaneU(o,d,uCk.x):cockpitDisplayU(o,d,uCk.y)");
-  const COCKPIT_ALL = cockpitOf("uPass<.5?cockpitPanes(o,d,uCk.x):cockpitDisplays(o,d,uCk.y)");
+  const COCKPIT = cockpitOf("uPass<2.5?cockpitPaneU(o,d,uCk.x):cockpitDisplayU(o,d,uCk.y)", false);
+  const COCKPIT_ALL = cockpitOf("uPass<.5?cockpitPanes(o,d,uCk.x):cockpitDisplays(o,d,uCk.y)", true);
   const ckUniforms = ["uGX", "uGY", "uGZ", "uGT", "uCk", "uPO", "uPU", "uPV", "uPN", "uPoly", "uPInfo", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"];
   ctx.glEffect({ id: "cockpit", family: "cockpit", chunk: [2, 4], canvas: "air", fragment: COCKPIT, uniforms: ckUniforms });
   ctx.glEffect({ id: "cockpit.all", family: "cockpit", chunk: [0, 2], canvas: "air", fragment: COCKPIT_ALL, uniforms: ckUniforms });
