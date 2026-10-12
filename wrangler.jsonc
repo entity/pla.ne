@@ -1,0 +1,14 @@
+// https://air.pla.ne: the static site in a380/dist as Workers static assets, with no Worker code (a380/site/DEPLOY.md).
+// `npm run deploy` builds the site and uploads it; wrangler takes the account from `wrangler login` or the
+// CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN variables.
+{
+  "name": "air-pla-ne",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "a380/dist",
+    "not_found_handling": "404-page",
+    "html_handling": "auto-trailing-slash"
+  },
+  "routes": [{ "pattern": "air.pla.ne", "custom_domain": true }],
+  "workers_dev": false
+}
