@@ -744,7 +744,7 @@ export const PHASES = [
       doors: doorSet(["M2L", "U1L", "M2R", "M4R", "U1R", "M5L", "FWD", "AFT", "BULK"]), slides: "disarmed",
       gear: 1, slat: 0, flap: 0, aileronDroop: 0, spoilers: 0, n1: n1x4(0), engineRun: [0, 0, 0, 0], apu: 1,
       pitch: 0, height: 0, speed: 0,
-      lights: { ...LIGHTS_OFF, nav: 1, cargoFlood: 1, gearBay: 1 }, cabin: 1.0,
+      lights: { ...LIGHTS_OFF, nav: 1, cargoFlood: 1, gearBay: 1 }, cabin: 1.0, blinds: 1,
     },
     notes: "Bridges at M2L and U1L; catering at M2R, M4R, U1R and via M5L; all three holds open. APU running, beacon off.",
   },
@@ -755,7 +755,7 @@ export const PHASES = [
       doors: doorSet([]), slides: "armed", gear: 1, slat: 0, flap: 0, aileronDroop: 0, spoilers: 0,
       n1: n1x4(ENGINES.n1.groundIdle), engineRun: [1, 1, 1, 1], startAtS: [15, 15, 95, 95], apu: 1, // starts: s after the push begins
       pitch: 0, height: 0, speed: -PERF.pushbackSpeed,
-      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1 }, cabin: 0.8,
+      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1 }, cabin: 0.8, blinds: 0,
     },
     notes: "The towbarless tug drives in and picks up the nose wheel while the doors close and the slides arm; beacon ON when cleared to push; the tug moves 5 s later; engines 1+2 start 15 s into the push, 3+4 at 95 s; the tug holds the aircraft and releases the nose wheel as 3+4 come up to idle, then drives off; APU stays on until after start.",
   },
@@ -766,7 +766,7 @@ export const PHASES = [
       doors: doorSet([]), slides: "armed", gear: 1, slat: 20, flap: 8, aileronDroop: 5, spoilers: 0,
       n1: n1x4(ENGINES.n1.groundIdle), breakawayS: 8, apu: 0,
       pitch: 0, height: 0, speed: PERF.taxiSpeed,
-      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, taxi: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.3,
+      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, taxi: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.3, blinds: 0,
     },
     notes: "Flaps to the take-off setting after start (CONF 1+F: slats 20, flaps 8, ailerons drooped 5). NOSE TAXI, runway turn-off on.",
   },
@@ -776,7 +776,7 @@ export const PHASES = [
     target: {
       doors: doorSet([]), slides: "armed", gear: 1, slat: 20, flap: 8, aileronDroop: 5, spoilers: 0,
       n1: n1x4(ENGINES.n1.groundIdle), apu: 0, pitch: 0, height: 0, speed: 0,
-      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1, taxi: 1, takeoff: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.25,
+      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1, taxi: 1, takeoff: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.25, blinds: 0,
     },
     notes: "Strobes ON entering the runway; landing lights ON, NOSE T.O (taxi + take-off lights), runway turn-off ON.",
   },
@@ -786,7 +786,7 @@ export const PHASES = [
     target: {
       doors: doorSet([]), slides: "armed", gear: 1, slat: 20, flap: 8, aileronDroop: 5, spoilers: 0,
       n1: n1x4(ENGINES.n1.takeoffTypical), apu: 0, pitch: PERF.rotationPitch, height: 35 * FT, speed: PERF.v2 + 10,
-      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1, taxi: 1, takeoff: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.25,
+      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1, taxi: 1, takeoff: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.25, blinds: 0,
     },
     notes: "Stabilise ~50% N1, then FLX: FADEC holds 78% below 32.5 kt, take-off thrust set by 80 kt. Rotate at VR at 3 deg/s; lift-off ~10 deg; target 12.5 deg.",
   },
@@ -796,7 +796,7 @@ export const PHASES = [
     target: {
       doors: doorSet([]), slides: "armed", gear: 0, slat: 0, flap: 0, aileronDroop: 0, spoilers: 0,
       n1: n1x4(ENGINES.n1.climb), apu: 0, pitch: 9, height: 3000 * FT, speed: PERF.climbSpeed,
-      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1, taxi: 1, takeoff: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.25,
+      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1, taxi: 1, takeoff: 1, runwayTurnoff: 1, camera: 1 }, cabin: 0.25, blinds: 0,
     },
     notes: "Switches unchanged after lift-off; the nose-strut lights (taxi, take-off, runway turn-off) and the camera lights go dark as the gear retracts, the wing-root taxi lights stay on. Positive climb: gear up. 1500 ft: thrust CL, accelerate. S speed: flaps lever 0 (flaps first, then slats). NOSE and RWY TURN OFF off after flap retraction; logo (AUTO) off when the slats are in.",
   },
@@ -806,7 +806,7 @@ export const PHASES = [
     target: {
       doors: doorSet([]), slides: "armed", gear: 0, slat: 0, flap: 0, aileronDroop: 0, spoilers: 0,
       n1: n1x4(ENGINES.n1.climb), apu: 0, pitch: 8, height: 10000 * FT, speed: PERF.climbSpeed,
-      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1 }, cabin: 0.6,
+      lights: { ...LIGHTS_OFF, nav: 1, beacon: 1, strobe: "on", landing: 1 }, cabin: 0.6, blinds: 0,
     },
     notes: "Passing 10,000 ft: landing lights OFF (Airbus SOP; step() switches them off at 10,000 ft). Strobes, beacon and nav stay on.",
   },
@@ -841,6 +841,10 @@ export function initialState() {
     proc: { stage: 0, rotating: false, posClimbAt: null, readyAt: null },
     lights: { nav: 1, beacon: 0, strobe: 0, logo: 1, wing: 0, engine: 0, landing: 0, taxi: 0, taxiNose: 0, takeoff: 0, runwayTurnoff: 0, camera: 0, cargoFlood: 1, gearBay: 1, obstruction: 1 },
     cabin: 1,
+    // the window blinds (world.mjs windowBlind: 7% of the windows): 1 down as passengers left them at the stand, 0 all open.
+    // [E] operators' cabin-secure check: every blind open for take-off and landing (the crew and passengers see out,
+    // eyes adjusted to the outside light), so the crew raise them as the doors close and the aircraft is pushed back
+    blinds: 1,
     tug: 0, // the pushback tug (TUG): 0 none at the stand
   };
 }
@@ -1064,6 +1068,7 @@ function substep(s, tg, dt) {
   // ---- lights (applyLights: the switches, the crew's SOP actions, the reader's settings, the automatic rules)
   applyLights(s, tg);
   s.cabin = approach(s.cabin, tg.cabin ?? 1, 0.25, dt);
+  s.blinds = approach(s.blinds ?? 1, tg.blinds ?? 0, 0.1, dt); // [E] the cabin crew's walk down both decks, about 10 s
   return s;
 }
 

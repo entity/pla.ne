@@ -889,7 +889,8 @@ export function glslWindowPart(name, { planes, rows, doors, xr = null }, inks) {
     float c=mix(sharp,band*${f(row.w / row.pitch)},fine)*near;
     // the blinds are the fallback's (W.windowBlind, review round 3); the per-window shade varies 10%, not 26% (runs of
     // dimmer windows read as a whole piece losing its glow)
-    float blind=1.${(row.blinds ?? []).map(([k, sd]) => `*(1.-(1.-step(.5,abs(i-${f(k)})))*step(0.,side*${f(sd)}))`).join("")};
+    // (uCabin.z the blinds channel, model.mjs: 1 at the stand, 0 all open from the pushback on, for take-off and landing)
+    float blind=1.-(1.-1.${(row.blinds ?? []).map(([k, sd]) => `*(1.-(1.-step(.5,abs(i-${f(k)})))*step(0.,side*${f(sd)}))`).join("")})*uCabin.z;
     // fu/r2-lights: a closed blind is a dim pane lit from behind (lum .1, flat), not a hole: black, it read darker than
     // the card (luminance 11 against 19, the skin 56)
     float shade=(.9+.1*hash12(vec2(i+${f(row.id * 7)},${f(j * 17 + 3)}+side*31.)))*mix(${f(BLIND_LUM)},1.,blind);

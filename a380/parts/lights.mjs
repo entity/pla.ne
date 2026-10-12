@@ -1774,12 +1774,12 @@ function windowPaperCss() {
   });
   return `.iso{--a3-m8-win-rim:${hex(P.rim)};--a3-m8-win-core:${hex(P.core)};--a3-m8-win-shut:${hex(shut)}}
 .a3-win-shut{fill:var(--a3-m8-win-shut);stroke:none}
-.iso[data-theme="light"] .a3-win-hot{fill:var(--a3-m8-win-rim)}
+.iso[data-theme="light"] :is(.a3-win-hot,.a3-win-hot-b){fill:var(--a3-m8-win-rim)}
 .iso[data-theme="light"] .a3-win-lit-door{fill:var(--a3-win-lit)}
 .iso[data-theme="light"] .a3-port-gl{fill:var(--a3-m8-win-rim)}
 .iso[data-theme="light"] .a3-port-core{fill:var(--a3-m8-win-core)}
-.a3-win-cbase,.a3-port-cbase{fill:var(--a3-glass);stroke:none}
-.a3-win-core{fill:var(--a3-m8-win-core);stroke:none}`;
+.a3-win-cbase,.a3-win-cbase-b,.a3-port-cbase{fill:var(--a3-glass);stroke:none}
+.a3-win-core,.a3-win-core-b{fill:var(--a3-m8-win-core);stroke:none}`;
 }
 
 // --------------------------------------------------------------------------------------------- checks

@@ -394,7 +394,7 @@ const A3GL = (() => {
       }
       const pv = fx.pv || {};
       const st = fx.state || {};
-      key = [view[0], view[1], view[2], view[3], canvas ? canvas.width : 0, canvas ? canvas.height : 0, fx.share, fx.first, pv.scroll, pv.cabinLight, pv.cabin, pv.paused, st.speed, st.height, st.phase, e].join(",");
+      key = [view[0], view[1], view[2], view[3], canvas ? canvas.width : 0, canvas ? canvas.height : 0, fx.share, fx.first, pv.scroll, pv.cabinLight, pv.cabin, pv.paused, st.speed, st.height, st.phase, st.blinds, e].join(",");
     }
     if (key && gateKey[name] === key) return false;
     gateKey[name] = key;

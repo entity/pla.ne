@@ -499,6 +499,7 @@ function jumpToTargets() {
     if (engSeq) return false; // the start sequence waits for the beacon, then 1+2 at idle, then 3+4
     if (F.doorsMoving(s, t)) return false;
     if (t.cabin !== undefined && Math.abs((s.cabin ?? 1) - t.cabin) > 0.01) return false; // the cabin dimmer
+    if (t.blinds !== undefined && Math.abs((s.blinds ?? 1) - t.blinds) > 0.01) return false; // the crew raising the blinds
     if (Math.abs((s.slat ?? 0) - (t.slat ?? s.slat)) > 0.05 || Math.abs((s.flap ?? 0) - (t.flap ?? s.flap)) > 0.05) return false;
     // the gear's own end stage, not only its numbers (doors at 2e-15 left the model in "doorsClosing" for good)
     if (t.gear !== undefined && (Math.abs(s.gear.leg - t.gear) > 1e-3 || Math.abs((s.gear.body ?? s.gear.leg) - t.gear) > 1e-3 || s.gear.doors > 1e-3 || s.gear.stage !== (t.gear ? "locked" : "up"))) return false;
@@ -706,7 +707,7 @@ const REWIND_ENTRIES_PER_S = 150; // fu/f3-interaction: history entries a rewind
  * in one frame near lift-off, where two entries a tenth of a second apart are far apart in the picture): the
  * continuous values interpolated, everything else from the nearer entry.
  */
-const LERP_KEYS = ["height", "pitch", "speed", "groundDistance", "gamma", "vs", "lift", "slat", "flap", "slatDrive", "flapDrive", "aileronDroop", "spoilers", "tug", "cabin", "apu"];
+const LERP_KEYS = ["height", "pitch", "speed", "groundDistance", "gamma", "vs", "lift", "slat", "flap", "slatDrive", "flapDrive", "aileronDroop", "spoilers", "tug", "cabin", "blinds", "apu"];
 function lerpState(a, b, f) {
   if (f <= 0) return a;
   if (f >= 1) return b;
@@ -2713,7 +2714,7 @@ function tick(now) {
   // merge fu-r1: the cabin dimmer ramps in the model (0.25 a second) and its light envelope eases after it; neither moves
   // the pose, a vary or the readout on the first ticks after a Cabin click, so once a settled page could sleep
   // (fu/r1-perf) the click stepped one tick and the loop slept with the cabin still lit
-  const cabinEasing = !pv.paused && !calm && (Math.abs((sim.state.cabin ?? 1) - (sim.target.cabin ?? 1)) > 1e-4 || Math.abs((pv.cabinLight ?? sim.state.cabin ?? 1) - (sim.state.cabin ?? 1)) > 1e-3);
+  const cabinEasing = !pv.paused && !calm && (Math.abs((sim.state.cabin ?? 1) - (sim.target.cabin ?? 1)) > 1e-4 || Math.abs((pv.cabinLight ?? sim.state.cabin ?? 1) - (sim.state.cabin ?? 1)) > 1e-3 || Math.abs((sim.state.blinds ?? 1) - (sim.target.blinds ?? 0)) > 1e-4); // (+ the blinds, model.mjs)
   // merge fu-r1 end
   // fu/r2-interaction: the high-lift drive too (sort review, blocker: the Fowler flaps stay at 0° for the first ~127
   // drive degrees, so neither the pose, a vary nor the readout changed and the loop slept mid-drive at the stand)

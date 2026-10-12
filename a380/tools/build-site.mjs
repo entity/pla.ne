@@ -136,13 +136,18 @@ async function capture(dir) {
   mkdirSync(dir, { recursive: true });
   const drive = join(ROOT, "scripts", "drive.mjs");
   const READOUT = "document.querySelector('[data-readout]').textContent";
-  // take-off above 100 kt, paused, GL faded in, at bearing 45° (turn −5): the release captures' takeoff-b45
+  // take-off above 100 kt, paused, GL faded in, at bearing 45° (turn −5): the release captures' takeoff-b45. Paused in
+  // a beacon flash (the same evaluation that sees it lit pauses, so it cannot go dark in between): the beacon is on
+  // whenever the engines run, but it is lit 0.12 s a second, and a card paused between flashes read as the crew
+  // rolling with it off
+  const BEACON_LIT = "Object.keys(__a380.lights).some((k) => /beacon/i.test(k) && __a380.lights[k].level.x > 0.9 && __a380.lights[k].flash > 0.8)";
   const takeoff = (theme) => [
     ["until", "window.__a380 && window.__a380.state && window.__a380.controller", 240000],
     ["wait", 1500],
     ["key", "5"],
     ["until", `__a380.state.phase==='TAKEOFF' && !__a380.pv.seek && +(/(\\d+) kt/.exec(${READOUT})||[0,0])[1] > 100`, 90000],
-    ["key", " "],
+    ["until", `${BEACON_LIT} && (__a380.actions.pause(), true)`, 10000],
+    ["eval", `'paused ' + __a380.pv.paused + ' · beacon lit ' + ${BEACON_LIT}`],
     ["wait", 800],
     ["until", "!__a380.glInfo || __a380.glInfo.pending === 0 && (!__a380.glInfo.ok || __a380.pv.glShare >= 0.999)", 90000],
     ["eval", "'renderer ' + ((__a380.glInfo && __a380.glInfo.renderer) || 'none (fallback)') + ' · ok ' + (__a380.glInfo && __a380.glInfo.ok)"],

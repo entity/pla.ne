@@ -1013,15 +1013,21 @@ export function build(ctx) {
     const frame = [];
     const core = []; // fu/r1-lights: the daylight pale core, 0.02 m in from the pane's edge (lights.mjs colours and fades it)
     const shut = []; // fu/r2-lights: a closed blind, lit from behind by the cabin (lights.mjs colours and fades it)
+    // the blinds channel (model.mjs s.blinds): a window whose blind is down at the stand is also drawn lit, in its own
+    // classes (-b) that fade in as the crew raise the blinds for take-off, while its shut pane fades out
+    const litB = [];
+    const coreB = [];
     for (const { p, blind } of e.win) {
       const [X, Y] = fp.xy(p);
       glass.push(roundRectPath(X, Y, W.m(ww), W.m(wh), 0.7));
-      if (!blind) lit.push(roundRectPath(X, Y, W.m(ww), W.m(wh), 0.7));
+      (blind ? litB : lit).push(roundRectPath(X, Y, W.m(ww), W.m(wh), 0.7));
       if (blind && ctx.theme !== "light") shut.push(roundRectPath(X, Y, W.m(ww), W.m(wh), 0.7)); // fu/r2-lights
-      if (!blind && ctx.theme === "light") core.push(roundRectPath(X, Y, W.m(ww - 0.04), W.m(wh - 0.04), 0.5)); // fu/r1-lights fu/r1-lights end
+      if (ctx.theme === "light") (blind ? coreB : core).push(roundRectPath(X, Y, W.m(ww - 0.04), W.m(wh - 0.04), 0.5)); // fu/r1-lights fu/r1-lights end
       frame.push(roundRectPath(X, Y, W.m(ww) + 0.7, W.m(wh) + 0.7, 1.05));
     }
-    e.parts.push(`<path class="iso-line" data-tone="faint" d="${frame.join("")}"/><path class="a3-win" d="${glass.join("")}"/>${lit.length ? `<path class="a3-win-lit" style="opacity:0" d="${lit.join("")}"/><path class="a3-win-hot" style="opacity:0" d="${lit.join("")}"/>` : ""}${core.length ? `<path class="a3-win-cbase" style="opacity:0" d="${core.join("")}"/><path class="a3-win-core" style="opacity:0" d="${core.join("")}"/>` : ""}${shut.length ? `<path class="a3-win-shut" style="opacity:0" d="${shut.join("")}"/>` : ""}`); // fu/r1-lights: + a3-win-core; fu/r2-lights: + a3-win-shut
+    const layers = (L, C, b) =>
+      `${L.length ? `<path class="a3-win-lit${b}" style="opacity:0" d="${L.join("")}"/><path class="a3-win-hot${b}" style="opacity:0" d="${L.join("")}"/>` : ""}${C.length ? `<path class="a3-win-cbase${b}" style="opacity:0" d="${C.join("")}"/><path class="a3-win-core${b}" style="opacity:0" d="${C.join("")}"/>` : ""}`;
+    e.parts.push(`<path class="iso-line" data-tone="faint" d="${frame.join("")}"/><path class="a3-win" d="${glass.join("")}"/>${layers(lit, core, "")}${layers(litB, coreB, "-b")}${shut.length ? `<path class="a3-win-shut" style="opacity:0" d="${shut.join("")}"/>` : ""}`); // fu/r1-lights: + a3-win-core; fu/r2-lights: + a3-win-shut
   }
   // the GL windows' displayed-luminance curve (cabin^.66, shaders.mjs glslWindowPart), so the handover keeps the level
   // review round 3: the GL windows dim in energy, so their hue holds as they fall; the fallback stacks the window's
@@ -1032,18 +1038,26 @@ export function build(ctx) {
   // fu/r2-lights: by daylight the three layers take gl/passes.js's fitted alphas (pv.winA: amber, rim, core), so the pane
   // composites what the windows program lays at this zoom and cabin level (review fu-r2: amber against GL's glass at the
   // Tail and Wing gear zooms with the cabin dimmed); the r1 laws stay as the fallback before the first frame
-  ctx.vary("a3-win-lit", `(() => { const l = ${lvD}; return (LIGHT ? (pv.winA ? pv.winA[0] : 0.5 * F.smooth(0, 0.4, l) + 0.5 * F.smooth(0.4, 1, l)) : Math.min(1, l / 0.4)) * ${hand}; })()`);
+  const VARY = {};
+  VARY["a3-win-lit"] = `(() => { const l = ${lvD}; return (LIGHT ? (pv.winA ? pv.winA[0] : 0.5 * F.smooth(0, 0.4, l) + 0.5 * F.smooth(0.4, 1, l)) : Math.min(1, l / 0.4)) * ${hand}; })()`;
   // fu/lights: the gate colour comes in as the GL's tonemapped curve rises (follow-up item 26: with smooth(.4, 1) the FL100
   // cabin, lvD .71, read 10 levels under the GL; 1 - (1 - t)^1.5 meets it at lvD .4, .54, .71, .85 and 1)
   // fu/r1-lights: by daylight a3-win-hot is the GL's warm rim and a3-win-core its pale core, in as the GL's own core comes
   // in with the pane's size on screen (pv.winCore, gl/passes.js; review fu-1: at Inspect zoom the GL pane is a pale core in
   // a one-pixel warm rim, the fallback was flat amber); the dark theme is unchanged
-  ctx.vary("a3-win-hot", `LIGHT ? (pv.winA ? pv.winA[1] : (pv.winCore || 0) * (0.5 * F.smooth(0, 0.4, ${lvD}) + 0.5 * F.smooth(0.4, 1, ${lvD}))) * ${hand} : (1 - (1 - Math.min(1, Math.max(0, (${lvD} - 0.4) / 0.6))) ** 1.5) * ${hand}`);
-  ctx.vary("a3-win-cbase", `LIGHT && pv.winA ? pv.winA[3] * ${hand} : 0`);
-  ctx.vary("a3-win-core", `LIGHT ? (pv.winA ? pv.winA[2] : (pv.winCore || 0) * (0.5 * F.smooth(0, 0.4, ${lvD}) + 0.5 * F.smooth(0.4, 1, ${lvD}))) * ${hand} : 0`);
+  VARY["a3-win-hot"] = `LIGHT ? (pv.winA ? pv.winA[1] : (pv.winCore || 0) * (0.5 * F.smooth(0, 0.4, ${lvD}) + 0.5 * F.smooth(0.4, 1, ${lvD}))) * ${hand} : (1 - (1 - Math.min(1, Math.max(0, (${lvD} - 0.4) / 0.6))) ** 1.5) * ${hand}`;
+  VARY["a3-win-cbase"] = `LIGHT && pv.winA ? pv.winA[3] * ${hand} : 0`;
+  VARY["a3-win-core"] = `LIGHT ? (pv.winA ? pv.winA[2] : (pv.winCore || 0) * (0.5 * F.smooth(0, 0.4, ${lvD}) + 0.5 * F.smooth(0.4, 1, ${lvD}))) * ${hand} : 0`;
   // fu/r2-lights: a closed blind at night is a dim pane lit from behind (the GL's blind energy, tonemapped near linear,
   // so its cover follows lvD); by day it stays glass (review fu-r2: a black hole darker than the card)
-  ctx.vary("a3-win-shut", `LIGHT ? 0 : ${lvD} * ${hand}`);
+  // the blinds (model.mjs s.blinds, 1 at the stand): a shut pane fades out and its lit copy (the -b classes) in as the
+  // crew raise them, in step with the GL windows program's blind term (uCabin.z)
+  const up = "(1 - Math.min(1, Math.max(0, s && s.blinds !== undefined ? s.blinds : 1)))";
+  ctx.vary("a3-win-shut", `LIGHT ? 0 : ${lvD} * ${hand} * (1 - ${up})`);
+  for (const c in VARY) {
+    ctx.vary(c, VARY[c]);
+    ctx.vary(`${c}-b`, `(${VARY[c]}) * ${up}`);
+  }
   // fu/r1-lights end
   // fu/lights end
 
@@ -1209,9 +1223,9 @@ export function build(ctx) {
   ctx.css(`.iso{--a3-glass:#b9c3cc;--a3-win-lit:#f9c565;--a3-port-lit:#f9c565;--a3-cavity:#6e6a63;--a3-lens:#7d8c99;--a3-flood:#f3c76d;--a3-port-core:#f4e6c3;--a3-win-hot:#f9c565}
 .iso[data-theme="dark"]{--a3-port-core:#fff6e4;--a3-win-hot:#f4eacf;--a3-glass:#06080a;--a3-win-lit:#cbb993;--a3-port-lit:#efe2c4;--a3-cavity:#020304;--a3-lens:#1b2630;--a3-flood:#ffe2a6}
 .a3-win{fill:var(--a3-glass);stroke:none}
-.a3-win-lit{fill:var(--a3-win-lit);stroke:none}
+.a3-win-lit,.a3-win-lit-b{fill:var(--a3-win-lit);stroke:none}
 .a3-win-lit-door{fill:var(--a3-win-hot);stroke:none}
-.a3-win-hot{fill:var(--a3-win-hot);stroke:none}
+.a3-win-hot,.a3-win-hot-b{fill:var(--a3-win-hot);stroke:none}
 .a3-port-gl{fill:var(--a3-port-lit);stroke:none}
 .a3-port-core{fill:var(--a3-port-core);stroke:none}
 .a3-dw,[class*="a3-dw-"]{fill:var(--a3-cavity);stroke:var(--a3-cavity);stroke-width:.6px;stroke-linejoin:round}

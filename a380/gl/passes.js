@@ -197,6 +197,7 @@ const A3M8 = (() => {
     const cabin = E("cabin", s.cabin ?? 1);
     settle(cabin, s.cabin ?? 1, dt, 1.3, calm);
     pv.cabinLight = clamp01(cabin.x);
+    st.blinds = clamp01(s.blinds ?? 1); // the window blinds (model.mjs): 1 the stand's 7% down, 0 all open
     const powered = (s.apu ?? 0) > 0.02 || (s.engineRun ?? []).some((r) => r) ? 1 : 0;
     const ck = E("cockpit");
     settle(ck, powered, dt, 0.7, calm);
@@ -748,7 +749,7 @@ const A3M8 = (() => {
     active: (fx) => on("windows") && ((fx.pv.cabinLight ?? 0) > 1e-3 || st.doors.some((v) => v > 1e-3)),
     draw(fx, pass, spec) {
       const mask = ensureMask(fx);
-      const common = { ...mask, uDoors: st.doors, uCabin: [fx.pv.cabinLight, 0.85, 0, 0], uFirst: st.first, uNoDither: nd() };
+      const common = { ...mask, uDoors: st.doors, uCabin: [fx.pv.cabinLight, 0.85, st.blinds ?? 1, 0], uFirst: st.first, uNoDither: nd() };
       // a piece the page has faded out (an Inspect view) carries no lit windows either
       const faded = fadedRuns(fx);
       for (const w of M8.D.windows) {
