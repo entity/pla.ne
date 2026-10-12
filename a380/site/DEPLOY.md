@@ -63,6 +63,11 @@ is the site's root. If the folder is served from a subpath of a larger site, pre
 2. `_headers` and `404.html` are read automatically. Cloudflare compresses with brotli or gzip for browsers that ask.
 3. Custom domain: the project → Custom domains → Set up a domain.
 
+Or as Workers static assets, with no Worker code (how https://air.pla.ne/ is served): a `wrangler.jsonc` with
+`"assets": { "directory": "a380/dist", "not_found_handling": "404-page" }` and
+`"routes": [{ "pattern": "your.domain", "custom_domain": true }]`, then `npx wrangler deploy`. `_headers` is read the
+same way, and the build's `.assetsignore` keeps `.build-site`, `.nojekyll` and `vercel.json` out of the upload.
+
 ## Netlify
 
 1. Drag `a380/dist` onto app.netlify.com/drop, or `npx netlify-cli deploy --dir a380/dist --prod`.

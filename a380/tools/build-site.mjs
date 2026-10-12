@@ -651,7 +651,11 @@ files.set(
   "_headers",
   Buffer.from(
     [
-      ["/*", [["X-Content-Type-Options", "nosniff"], ["Referrer-Policy", "strict-origin-when-cross-origin"], ["Cache-Control", SHORT]]],
+      // no Cache-Control on "/*": Cloudflare and Netlify join every matching rule's values, so the assets would get
+      // both "max-age=0, must-revalidate" and "immutable"; the pages and the assets get theirs from rules that don't overlap
+      ["/*", [["X-Content-Type-Options", "nosniff"], ["Referrer-Policy", "strict-origin-when-cross-origin"]]],
+      ["/", [["Cache-Control", SHORT]]],
+      ["/*.html", [["Cache-Control", SHORT]]],
       ["/assets/*", [["Cache-Control", LONG]]],
     ]
       .map(([path, list]) => `${path}\n${list.map(([k, v]) => `  ${k}: ${v}`).join("\n")}`)
@@ -674,6 +678,8 @@ files.set(
   ),
 );
 files.set(".nojekyll", Buffer.from("")); // GitHub Pages: serve the folder as it is
+// Cloudflare Workers static assets (wrangler deploy): don't publish the build marker or the other hosts' files
+files.set(".assetsignore", Buffer.from(".build-site\n.nojekyll\nvercel.json\n"));
 files.set(".build-site", Buffer.from("written by a380/tools/build-site.mjs, which clears and rewrites this folder\n"));
 
 for (const [path, data] of files) {
