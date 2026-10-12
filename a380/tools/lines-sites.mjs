@@ -37,7 +37,7 @@ if (!from && !page) {
 const out = resolve(from ?? value("--out", join(A380, "tmp/lines-sites", basename(page).replace(/\.html$/, ""))));
 const views = value("--views", null)?.split(",");
 
-// owners by part-name prefix (a380/notes/followup/PLAN.md §4 and the follow-up packages' file lists)
+// owners by part-name prefix (the follow-up plan and its packages' file lists)
 const OWNERS = [
   [/^wings\./, "wings", ["parts/wings.mjs"]],
   [/^eng\./, "wings", ["parts/engines.mjs"]],

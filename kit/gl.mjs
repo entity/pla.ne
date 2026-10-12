@@ -59,7 +59,7 @@ export function glCamera(projection) {
   };
 }
 
-// ---- f3-engine: per-view camera elevation (a380/notes/followup/f3-engine.md E1) -------------------------------------
+// ---- f3-engine: per-view camera elevation (E1) -------------------------------------
 // The GL camera of the frame the runtime drew: `cams` is controller.cams() (or TURN.cams(scene, values)); at a state with
 // `$elevation` its world camera looks down at that elevation, and a layer drawn with `draw({ uCam: glCameraAt(P,
 // cams).cam })` projects its lights where the parts are. Without `$elevation` it equals glCamera(projection).

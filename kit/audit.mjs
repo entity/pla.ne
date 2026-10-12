@@ -264,7 +264,7 @@ function segmentPoint(p, a, b) {
 
 export function sdf(shape, p) {
   let d = baseSdf(shape, p);
-  // f3-engine (a380/notes/followup/f3-engine.md E4): a shell (`shell: t`, e.g. a canopy recorded as a convex hull): the
+  // f3-engine (E4): a shell (`shell: t`, e.g. a canopy recorded as a convex hull): the
   // solid is the hull's outer layer t thick, its inside a cavity, so a part inside (a panel under the roof) can touch the
   // inner face without sinking into the hull. A hull's faces whose outward normal is one of `open` (unit vectors, the
   // piece's closing cuts, which are not skin) bound no layer: the cavity runs out through them. Without the key nothing
@@ -456,7 +456,7 @@ function tubeDistance(shape, p, segments) {
 
 function bodyDepth(shape, c, V, eps) {
   const { F, poly } = shape;
-  // f3-engine (a380/notes/followup/f3-engine.md E1): the cache holds the view it was made for; a static shape met again
+  // f3-engine (E1): the cache holds the view it was made for; a static shape met again
   // from another camera elevation (the turn audit's `$elevation` states) had its 30° view products reused (was !shape._f)
   if (!shape._f || shape._f.V !== V) {
     const s = poly.map(([value]) => value);

@@ -1,0 +1,16 @@
+{
+  // the type check only (npm run typecheck): plain JavaScript, checked in the files that opt in with // @ts-check
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023", "dom"],
+    "types": [],
+    "skipLibCheck": true,
+    "strict": false
+  },
+  "include": ["a380/*.mjs", "a380/parts/*.mjs", "a380/gl/*.mjs", "a380/tools/*.mjs", "kit/*.mjs", "scripts/*.mjs"]
+}

@@ -1,0 +1,25 @@
+{
+  "name": "pla.ne",
+  "version": "1.0.0",
+  "private": true,
+  "description": "An interactive, true-3D Airbus A380 in one web page.",
+  "license": "MIT",
+  "homepage": "https://air.pla.ne",
+  "repository": "github:entity/pla.ne",
+  "type": "module",
+  "engines": {
+    "node": ">=20.10"
+  },
+  "scripts": {
+    "build": "node a380/build.mjs && node a380/build.mjs --light",
+    "check": "node a380/build.mjs --check && node a380/tools/model-test.mjs",
+    "typecheck": "tsc -p .",
+    "site": "node a380/tools/build-site.mjs --rebuild --url https://air.pla.ne/",
+    "serve": "node a380/tools/serve-site.mjs --port 8741 --base /",
+    "deploy": "npm run site && wrangler deploy"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "wrangler": "^4.149.0"
+  }
+}

@@ -1,5 +1,5 @@
 // Steps the A380 model through every phase at 60 fps (real time) and checks for NaN and jumps.
-// node a380/tools/model-test.mjs   (tracked copy of the review rounds' a380/tmp/model-test.mjs; output recorded in notes/followup/interaction.md)
+// node a380/tools/model-test.mjs   (tracked copy of the review rounds' a380/tmp/model-test.mjs)
 import { readFileSync } from "node:fs";
 import * as M from "../model.mjs";
 

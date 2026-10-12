@@ -1,6 +1,6 @@
 // a380/parts/nose.mjs (M2): Nose: nose shell lofts, cockpit glazing, NLG bay walls, flight-deck cut piece.
 //
-// Contract: a380/notes/CONTRACT.md. Design: a380/DESIGN.md §5.1, §5.3, §9 (M2). Notes: a380/notes/modules/M2.md.
+// Design: a380/DESIGN.md §5.1, §5.3, §9 (M2).
 //
 // Shell (W.SHELL, built with W.loft as smooth ring-loft hulls): nose.radome 0.06–1.9 (+ nose.radome.tip, a
 // smooth cap closing the 0.06 m flat), nose.canopy (cut.fd, z ≥ W.CUT.FD.cut), nose.fdfloor (4.90–6.00),

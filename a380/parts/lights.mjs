@@ -98,22 +98,6 @@ export const WASH_SLOTS = { logo: [0, 1], wing: [2, 3], engine: [4, 5] };
 const N_LAMPS = 24;
 
 // --------------------------------------------------------------------------------------------- helpers
-/**
- * Consecutive groups { from, to } of generated functions, each holding at most `budget` characters of them (at least
- * one function a group). Follow-up item 34: a program's compile and link time on this machine's GPU grows with its
- * source at about 4-5 ms per KB, and no program may take over about 200 ms.
- */
-const CHUNK_BUDGET = 26 * 1024;
-export function chunksOf(sources, budget) {
-  const out = [];
-  let cur = null;
-  sources.forEach((s, k) => {
-    if (!cur || (cur.size + s.length > budget && cur.to > cur.from)) out.push((cur = { from: k, to: k, size: 0 }));
-    cur.to = k + 1;
-    cur.size += s.length;
-  });
-  return out;
-}
 const unit = (a) => {
   const l = Math.hypot(a[0], a[1], a[2]) || 1;
   return [a[0] / l, a[1] / l, a[2] / l];
@@ -473,12 +457,10 @@ export function build(ctx) {
 
   // ---- windows: one pass per window-bearing piece (its own faces), rows and doorways from W and the model
   const wparts = windowParts(W, M);
-  const winFns = [];
   let frustumOk = 0;
   wparts.forEach((wp, k) => {
     const part = ctx.part(wp.name);
     if (!part) throw new Error(`M8: window piece ${wp.name} was not built`);
-    const fn = `win${k}`;
     // the piece's surface: glslFrustumPolygon over W.loft's rings and clip flats (homothetic nose and tail rings,
     // S0 on the barrel, the belt strips), checked against the built part's own faces; the faces win a mismatch
     const planes = loftPlanes(W, wp.name, part);
@@ -487,7 +469,7 @@ export function build(ctx) {
     // the piece's own x range (kit metres): its window ink stops at its joints (a tan tick ran down every joint)
     const shell = W.SHELL.find((p) => p.name === wp.name);
     const xr = [W.PIVOT_X - shell.x[1], W.PIVOT_X - shell.x[0]];
-    winFns.push(SH.glslWindowPart(fn, { planes: planes.match ? planes.loft : SH.planesOfHull(part), rows: wp.rows, doors: wp.doors, xr }, SURF));
+    const table = SH.windowPartData({ planes: planes.match ? planes.loft : SH.planesOfHull(part), rows: wp.rows, doors: wp.doors, xr }, SH.WIN_N, wp.name);
     // scissor bands: each row's two ends on each side's skin, and each doorway's centre, with the reach of
     // their ink (half the window height plus the 0.55 m glow; a doorway's half diagonal), kit units
     const onSkin = (x, z, side) => W.kit(W.facetFrame(x, z, side).o).map((v) => Math.round(v * 100) / 100);
@@ -502,29 +484,25 @@ export function build(ctx) {
       const c = onSkin(x, dw.z, dw.side);
       bands.push({ a: c, b: c, r: W.m(Math.hypot(dw.hw, dw.hh) + 0.15) });
     }
-    page.windows.push({ pass: k, part: wp.name, group: wp.group, rows: wp.rows.reduce((a, r) => a + r.xs.length * (r.side ? 1 : 2), 0), doors: wp.doors.map((d) => d.id), bands });
+    page.windows.push({ pass: k, part: wp.name, group: wp.group, table, rows: wp.rows.reduce((a, r) => a + r.xs.length * (r.side ? 1 : 2), 0), doors: wp.doors.map((d) => d.id), bands });
   });
   const nWin = page.windows.reduce((a, w) => a + w.rows, 0);
   const nDoor = page.windows.reduce((a, w) => a + w.doors.length, 0);
   report.push(`windows: ${nWin} windows and ${nDoor} doorways on ${wparts.length} pieces; glslFrustumPolygon matches the built faces on ${frustumOk}`);
   const COMMON = `${SH.GLSL_COMMON}${SH.GLSL_MASK}`;
-  // split into chunks of whole pieces (follow-up item 34): one program held all 19 pieces and took 0.7-0.9 s to compile
-  const WINDOWS = chunksOf(winFns, CHUNK_BUDGET).map(({ from, to }) => ({
-    from,
-    to,
-    fragment: `${COMMON}${glslPose("G")}
-uniform vec4 uDoors[5];
+  // one program for every piece (perf/gl-light-uniforms): each piece's hull, rows and doorways are uniform tables set on
+  // its pass (SH.windowPartData, page.windows[k].table). Follow-up item 34 had split the baked form, a function per
+  // piece with every number a literal, into 11 programs of 18-34 KB (one held all 19 pieces and took 0.7-0.9 s to compile)
+  const WINDOWS = `${COMMON}${glslPose("G")}
 uniform vec4 uCabin;
-${winFns.slice(from, to).join("\n")}
+${SH.glslWindowPart("winPart", SH.WIN_N, SURF)}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toG(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToG(towardViewer()));
-  vec4 ink=vec4(0.);
-  ${winFns.slice(from, to).map((_, j) => `${j ? "else " : ""}if(uPass<${f(from + j + 0.5)})ink=win${from + j}(o,d,uCabin.x,uCabin.y);`).join("\n  ")}
+  vec4 ink=winPart(o,d,uCabin.x,uCabin.y);
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
-}`,
-  }));
-  WINDOWS.forEach((c, i) => ctx.glEffect({ id: `windows.${i}`, family: "windows", chunk: [c.from, c.to], canvas: "air", fragment: c.fragment, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uDoors", "uCabin", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] }));
+}`;
+  ctx.glEffect({ id: "windows", canvas: "air", fragment: WINDOWS, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uWP", "uWI", "uWR", "uWX", "uWB", "uWDA", "uWDB", "uWDC", "uWG", "uCabin", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
 
   // ---- cockpit: panes on the canopy (cut.fd) with the panel behind them; the lifted displays (cockpit group)
   const canopy = ctx.part("nose.canopy");
@@ -534,18 +512,17 @@ void main(){
   // two programs (follow-up item 34): the registration-driven passes the page draws (2: one pane, 3: one display; id
   // "cockpit", which the cabin's display fallback looks for) and the build-constant ones (0: every pane, 1: every
   // display) kept for a build without M2's or M7's targets; one program held both and took 160 ms to compile
-  const COCKPIT_GLSL = SH.glslCockpit({ canopy: SH.planesOfHull(canopy), panes, panel: deck.panel, displays: deck.displays }, SURF);
-  const cockpitOf = (call) => `${COMMON}${glslPose("G")}
+  const cockpitOf = (call, constant) => `${COMMON}${glslPose("G")}
 uniform vec4 uCk;
-${COCKPIT_GLSL}
+${SH.glslCockpit({ canopy: SH.planesOfHull(canopy), panes, panel: deck.panel, displays: deck.displays }, SURF, constant)}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toG(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToG(towardViewer()));
   vec4 ink=${call};
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
 }`;
-  const COCKPIT = cockpitOf("uPass<2.5?cockpitPaneU(o,d,uCk.x):cockpitDisplayU(o,d,uCk.y)");
-  const COCKPIT_ALL = cockpitOf("uPass<.5?cockpitPanes(o,d,uCk.x):cockpitDisplays(o,d,uCk.y)");
+  const COCKPIT = cockpitOf("uPass<2.5?cockpitPaneU(o,d,uCk.x):cockpitDisplayU(o,d,uCk.y)", false);
+  const COCKPIT_ALL = cockpitOf("uPass<.5?cockpitPanes(o,d,uCk.x):cockpitDisplays(o,d,uCk.y)", true);
   const ckUniforms = ["uGX", "uGY", "uGZ", "uGT", "uCk", "uPO", "uPU", "uPV", "uPN", "uPoly", "uPInfo", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"];
   ctx.glEffect({ id: "cockpit", family: "cockpit", chunk: [2, 4], canvas: "air", fragment: COCKPIT, uniforms: ckUniforms });
   ctx.glEffect({ id: "cockpit.all", family: "cockpit", chunk: [0, 2], canvas: "air", fragment: COCKPIT_ALL, uniforms: ckUniforms });
@@ -560,21 +537,18 @@ void main(){
     const sv = S([o[0], o[1], o[2] + 10]);
     return (su[0] - s0[0]) * (sv[1] - s0[1]) - (su[1] - s0[1]) * (sv[0] - s0[0]) > 0 ? 1 : -1;
   })();
-  const engFns = W.NACELLE.map((N, i) => {
-    const e = { y: N.y, z: N.cz, xl: W.PIVOT_X - N.lip, len: 8.39, rn: 1.94, ri: FAN.ri, depth: FAN.depth, rs: FAN.rs, ls: FAN.ls, blades: FAN.blades, twist: FAN.twist, slit: FAN.slit, spiral: FAN.spiral };
-    page.engines.push({ i, n: N.id, part: `eng.${N.id}.lip`, at: W.kit([N.lip, N.y, N.cz]), r: 1.94, sense });
-    return SH.glslNacelle(i, e);
-  });
+  // one function for the four nacelles, each placed by its pass's uEng (page.engines[i].eng: y, z, the lip plane x)
+  W.NACELLE.forEach((N, i) => page.engines.push({ i, n: N.id, part: `eng.${N.id}.lip`, at: W.kit([N.lip, N.y, N.cz]), r: 1.94, sense, eng: [N.y, N.cz, W.PIVOT_X - N.lip, 0] }));
+  const ENGINE = SH.glslNacelle({ ri: FAN.ri, depth: FAN.depth, rs: FAN.rs, ls: FAN.ls, blades: FAN.blades, twist: FAN.twist, slit: FAN.slit, spiral: FAN.spiral });
   const ENGINES = `${COMMON}${glslPose("Plane")}
-${engFns.join("\n")}
+${ENGINE}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(towardViewer()));
-  vec4 ink=vec4(0.);
-  ${W.NACELLE.map((_, i) => `${i ? "else " : ""}if(uPass<${f(i + 0.5)})ink=engine${i}(o,d);`).join("\n  ")}
+  vec4 ink=engine(o,d);
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
 }`;
-  ctx.glEffect({ id: "engines", canvas: "air", fragment: ENGINES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", ...W.NACELLE.flatMap((_, i) => [`uRun${i}`, `uGain${i}`]), "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
+  ctx.glEffect({ id: "engines", canvas: "air", fragment: ENGINES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uEng", "uRun", "uGain", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
 
   // ---- washes: logo on the fin pieces (by day a warm darkening of the fin's paint, cap .3, gain 3, R > G > B), wing
   // scan on the outer box tops and slats, engine scan on the cowls
@@ -584,9 +558,9 @@ void main(){
   // by daylight too: a warm paper tint (cap .18, gain 3: a tint near .1 reads grey on white paint), so the Logo switch
   // shows on the light page
   // review round 3: by daylight a multiply-like warm tint of the fin's own grey, tonemapped (no flat slab at a cap)
-  for (const name of finParts) washTargets.push({ name, kind: "logo", slots: WASH_SLOTS.logo, colours: { dark: SH.inkU("logo"), cap: LIGHT_THEME ? 0.3 : 0, paperGain: 3, mul: SH.inkU("logo") } });
-  for (const name of scanTargetNames(ctx, W)) washTargets.push({ name, kind: "scan", slots: [...WASH_SLOTS.wing, ...WASH_SLOTS.engine], colours: { dark: SH.inkU("scan"), tint: SH.inkU("scan"), cap: 0.15 } });
-  const washFns = washTargets.map((t, k) => {
+  for (const name of finParts) washTargets.push({ name, kind: "logo", slots: WASH_SLOTS.logo, colours: { logo: true, cap: LIGHT_THEME ? 0.3 : 0, paperGain: 3 } });
+  for (const name of scanTargetNames(ctx, W)) washTargets.push({ name, kind: "scan", slots: [...WASH_SLOTS.wing, ...WASH_SLOTS.engine], colours: { logo: false, cap: 0.15 } });
+  washTargets.forEach((t, k) => {
     const part = ctx.part(t.name);
     let target;
     if (part.kind === "hull") target = { hull: SH.planesOfHull(part) };
@@ -597,33 +571,24 @@ void main(){
       u = unit(u);
       const v = cross(a, u);
       target = { cone: { c: mul(Wd.F.o, KM), a, u, v, s0: Wd.s0 * KM, s1: Wd.s1 * KM, r0: Wd.r0 * KM, r1: Wd.r1 * KM } };
-    } else return null;
-    page.washes.push({ pass: k, part: t.name, group: part.group.name ?? "pitch", kind: t.kind });
-    return SH.glslWash(`wash${k}`, target, t.slots, t.colours);
+    } else return;
+    page.washes.push({ pass: k, part: t.name, group: part.group.name ?? "pitch", kind: t.kind, table: SH.washTargetData(target, t.colours, SH.WASH_N, t.name) });
   });
-  // split into chunks of whole targets (follow-up item 34: one program of 35 targets took 0.7 s to compile)
-  const WASHES = chunksOf(washFns.map((s) => s ?? ""), CHUNK_BUDGET).map(({ from, to }) => ({
-    from,
-    to,
-    fragment: `${COMMON}${glslPose("G")}
+  // one program for every target (perf/gl-light-uniforms): each target's surface and colours are uniform tables set on
+  // its pass (SH.washTargetData, page.washes[k].table), so the program is the same in both themes. Follow-up item 34 had
+  // split the baked form, a function per target, into 6 programs (one of all 35 targets took 0.7 s to compile)
+  const WASHES = `${COMMON}${glslPose("G")}
 uniform vec3 uWS[6];
 uniform vec3 uWD[6];
 uniform vec4 uWC[6];
-${washFns.slice(from, to).filter(Boolean).join("\n")}
+${SH.glslWash("wash")}
 void main(){
   vec2 vb=viewOf(gl_FragCoord.xy);
   vec3 o=toG(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToG(towardViewer()));
-  vec4 ink=vec4(0.);
-  ${washFns
-    .slice(from, to)
-    .map((s, j) => (s ? from + j : -1))
-    .filter((k) => k >= 0)
-    .map((k, j) => `${j ? "else " : ""}if(uPass<${f(k + 0.5)})ink=wash${k}(o,d);`)
-    .join("\n  ")}
+  vec4 ink=wash(o,d);
   gl_FragColor=finish(ink*visibleOf(uTarget)*uFirst*edgeFade(vb));
-}`,
-  }));
-  WASHES.forEach((c, i) => ctx.glEffect({ id: `washes.${i}`, family: "washes", chunk: [c.from, c.to], canvas: "air", fragment: c.fragment, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uWS", "uWD", "uWC", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] }));
+}`;
+  ctx.glEffect({ id: "washes", canvas: "air", fragment: WASHES, uniforms: ["uGX", "uGY", "uGZ", "uGT", "uWS", "uWD", "uWC", "uXP", "uXI", "uXC", "uXK", "uPass", "uTarget", "uMaskInfo", "uFirst", "uNoDither"] });
   report.push(`washes: ${washTargets.length} targets (${washTargets.filter((t) => t.kind === "logo").length} logo)`);
 
   // ---- lights: one pass per point light and per lamp lens (the `points` kind; id "lights")
@@ -656,22 +621,10 @@ void main(){
     const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
     page.winPaper = { rim: SH.GL_INKS.winRim.light, body: SH.GL_INKS.win.light, core: SH.GL_INKS.winCore.light, glass: hexRgb("#b9c3cc"), layers: { amber: hexRgb("#e1b162"), rim: P.rim.map((v) => Math.round(v * 255) / 255), core: P.core.map((v) => Math.round(v * 255) / 255) } };
   }
-  if (LIGHT_THEME) {
-    const VOLUMES_PAPER = `${COMMON}${glslPose("Plane")}${proxyGlsl(px)}${hazeGlsl}
-uniform vec4 uHaze;
-uniform float uApu;
-void main(){
-  vec2 vb=viewOf(gl_FragCoord.xy);
-  vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(towardViewer()));
-  float tAir=airT(o,d);
-  float hz=${hazeSum("1.")};
-  if(hz<=0.){gl_FragColor=vec4(0.);return;}
-  gl_FragColor=finish(${hazePaper("hz")}*uFirst*edgeFade(vb)*frameFade());
-}`;
-    ctx.glEffect({ id: "volumes", canvas: "air", fragment: VOLUMES_PAPER, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uHaze", "uApu", "uFrame", "uFirst", "uNoDither"] });
-  }
-  if (!LIGHT_THEME) {
-    const VOLUMES = `${COMMON}${glslPose("Plane")}${proxyGlsl(px)}${hazeGlsl}${SH.glslLamps(N_LAMPS)}
+  // one source for both themes (perf/gl-light-uniforms), the rule chosen by uLight (fixed per page): by daylight the
+  // haze alone, as a paper tint; at night the beams' front halves and the haze, as glow. The same source in both themes
+  // lets the browser's shader cache link it again at once after a theme switch
+  const VOLUMES = `${COMMON}${glslPose("Plane")}${proxyGlsl(px)}${hazeGlsl}${SH.glslLamps(N_LAMPS)}
 uniform vec4 uHaze;
 uniform float uApu;
 uniform float uSteps;
@@ -680,13 +633,18 @@ void main(){
   vec3 p0=rayOf(vb)*${f(KM)};vec3 V=towardViewer();
   vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(V));
   float tAir=airT(o,d);
+  if(uLight>.5){
+    float hz=${hazeSum("1.")};
+    if(hz<=0.){gl_FragColor=vec4(0.);return;}
+    gl_FragColor=finish(${hazePaper("hz")}*uFirst*edgeFade(vb)*frameFade());
+    return;
+  }
   float air=beams(p0,V,tAir,1.,uSteps);
   float hz=${hazeSum("1.")};
   vec4 ink=glowOf(${SH.inkU("beam")}*air*.9+${SH.inkU("haze")}*.1*(1.-exp(-hz*3.)));
   gl_FragColor=finish(ink*uFirst*edgeFade(vb)*frameFade());
 }`;
-    ctx.glEffect({ id: "volumes", canvas: "air", fragment: VOLUMES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uLS", "uLD", "uLC", "uHaze", "uApu", "uSteps", "uFrame", "uFirst", "uNoDither"] });
-  }
+  ctx.glEffect({ id: "volumes", canvas: "air", fragment: VOLUMES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uLS", "uLD", "uLC", "uHaze", "uApu", "uSteps", "uFrame", "uFirst", "uNoDither"] });
 
   // ---- ground: pools (platter-windowed), and in dark the beacon and strobe washes and the back halves
   // the pools fade to 0 over the last 1.4 m inside the platter (36.6-38.0 m), not in a rim-hugging 0.8 m: a pool that
@@ -706,18 +664,21 @@ void main(){
   float plat=1.-smoothstep(${f(w0)},${f(w1)},length(g.xy));
   // every ground-lit term fades with the true height (uWashH): the ground is far below once airborne
   float pool=lampPools(g)*plat*uWashH;
-  ${
-    LIGHT_THEME
-      ? `vec4 ink=tintInk(pool*.9,${SH.inkU("pool")},.06);` + // daylight: a floodlight pool on concrete barely shows
-        // fu/r2-lights: the back half of the daylight heat haze, inside its own box (as the dark page's back halves)
-        `
+  // (one source for both themes, perf/gl-light-uniforms: the daylight rule under uLight, then the night's)
+  if(uLight>.5){
+  // daylight: a floodlight pool on concrete barely shows
+  vec4 ink=tintInk(pool*.9,${SH.inkU("pool")},.06);
+  // fu/r2-lights: the back half of the daylight heat haze, inside its own box (as the dark page's back halves)
   if((uHaze.x+uHaze.y+uHaze.z+uHaze.w+uApu>0.)&&vb.x>uVolBox.x&&vb.y>uVolBox.y&&vb.x<uVolBox.z&&vb.y<uVolBox.w){
     vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(towardViewer()));
     float tAir=airT(o,d);
     float hz=${hazeSum("0.")};
     if(hz>0.)ink=over(${hazePaper("hz")}*frameFade(),ink);
-  }`
-      : `vec3 Lb=uBeacon.xyz*${f(KM)}-g;float lb=dot(Lb,Lb);
+  }
+  gl_FragColor=finish(ink*uFirst*edgeFade(vb));
+  return;
+  }
+  vec3 Lb=uBeacon.xyz*${f(KM)}-g;float lb=dot(Lb,Lb);
   // the lower beacon's pool: a red tint on the pavement, below the lamp pools (review fu-1: 90/(d²+1) clipped to R 247
   // under the belly, the loudest thing on the platter once a second); a wide soft law, peak about R 120 under the lens
   float rb=sqrt(lb);
@@ -736,8 +697,7 @@ void main(){
   float hz=vol?${hazeSum("0.")}:0.;
   // the back halves of the beams and the haze fade toward the card's frame over 40 CSS px (follow-up item 24); the pools
   // lie on the platter, inside it
-  vec4 ink=glowOf(${SH.inkU("pool")}*pool+${SH.inkU("beacon")}*beacon+${SH.inkU("strobe")}*flash+(${SH.inkU("beam")}*air*.9+${SH.inkU("haze")}*.1*(1.-exp(-hz*3.)))*frameFade());`
-  }
+  vec4 ink=glowOf(${SH.inkU("pool")}*pool+${SH.inkU("beacon")}*beacon+${SH.inkU("strobe")}*flash+(${SH.inkU("beam")}*air*.9+${SH.inkU("haze")}*.1*(1.-exp(-hz*3.)))*frameFade());
   gl_FragColor=finish(ink*uFirst*edgeFade(vb));
 }`;
   ctx.glEffect({ id: "ground", canvas: "ground", fragment: GROUND, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uLS", "uLD", "uLC", "uBeacon", "uVolBox", "uStrobe", "uHaze", "uApu", "uSteps", "uWashH", "uFrame", "uFirst", "uNoDither"] });
@@ -746,13 +706,11 @@ void main(){
   fallbacks(ctx, page, stand, report);
 
   // ---- page: data, the frame hook, CSS
-  const sum = (list) => list.reduce((a, c) => a + c.fragment.length, 0);
-  const most = (list) => Math.max(...list.map((c) => c.fragment.length));
-  page.sources = { windows: sum(WINDOWS), cockpit: COCKPIT.length, engines: ENGINES.length, washes: sum(WASHES), ground: GROUND.length };
+  page.sources = { windows: WINDOWS.length, cockpit: COCKPIT.length, engines: ENGINES.length, washes: WASHES.length, ground: GROUND.length };
   ctx.data("m8", page);
   ctx.script(`A3.on("frame", (fx) => A3M8.frame(fx));\nA3M8.attach(A3);`);
   ctx.css(`${SH.inkCss()}\n${CSS}\n${windowPaperCss()}\n${lensCss()}`);
-  report.push(`programs: ${Object.entries(page.sources).map(([k, v]) => `${k} ${(v / 1024).toFixed(0)} KB`).join(", ")}; windows in ${WINDOWS.length} programs (largest ${(most(WINDOWS) / 1024).toFixed(0)} KB), washes in ${WASHES.length} (largest ${(most(WASHES) / 1024).toFixed(0)} KB)`);
+  report.push(`programs: ${Object.entries(page.sources).map(([k, v]) => `${k} ${(v / 1024).toFixed(0)} KB`).join(", ")}`);
   for (const line of report) ctx.report(line);
   void v3;
 }

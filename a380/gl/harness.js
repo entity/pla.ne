@@ -31,8 +31,9 @@ const A3GL = (() => {
   // a time from the first animation frame after init and polled each frame through COMPLETION_STATUS_KHR, so the page
   // is not blocked while the GPU compiles: the fallbacks stay up (glShare 0) until every program has linked, then first light fades GL in as
   // before. Without the extension (or with A3GL.serial set before init) each program compiles and links at init
-  // through the kit's glLayer, as before. The heavy programs come split into chunks under about 200 ms each
-  // (DATA.gl.effects entries with a `family`: windows.0, windows.1 … draw with the family's page spec).
+  // through the kit's glLayer, as before. A program may come split into chunks (DATA.gl.effects entries with a
+  // `family`: cockpit and cockpit.all draw with the family's page spec); the windows and washes, once 17 chunks, are one
+  // program each since their pieces' numbers became uniform tables (perf/gl-light-uniforms).
   const GL_ATTRS = { premultipliedAlpha: true, alpha: true, antialias: false, preserveDrawingBuffer: false };
   /** Start one program without waiting for it: { gl, ready(), finish(opts) → layer | null }. */
   function startLayer({ canvas, fragment, extensions = [] }) {
@@ -207,7 +208,7 @@ const A3GL = (() => {
       steps.push(Math.round(performance.now() - t0));
       if (!current && !queue.length) done(failed);
       // (review fu-1 tried polling between frames on a 4 ms timer: first light came 1.7-1.9 s later, 9.5 s against 7.7 s
-      // at load 20, so the poll stays once a frame; notes/followup/r1-lights.md)
+      // at load 20, so the poll stays once a frame; follow-up r1-lights)
       else requestAnimationFrame(step);
     };
     requestAnimationFrame(step);
@@ -271,7 +272,7 @@ const A3GL = (() => {
     const errors = [];
     // every effect shipped with a fragment in DATA.gl.effects compiles here; page-registered effects bring theirs
     // a later registration of an id replaces an earlier one (M8 request 0: the harness's own "points" is registered
-    // first, M8's after it). A chunk of a split program (`family`: windows.2 of windows) takes its family's page spec
+    // first, M8's after it). A chunk of a split program (`family`: cockpit.all of cockpit) takes its family's page spec
     // and keeps its own id, fragment and chunk
     const last = (id) => registered.filter((r) => r.id === id).pop();
     const ids = [...new Set(registered.map((r) => r.id))];

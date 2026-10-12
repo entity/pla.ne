@@ -6,7 +6,7 @@
 // It also exports the skin geometry library (`geom(W)`) that parts/skin.mjs builds on: loft segments, S0 facet
 // planes in the kit frame, points on the skin, the unrolled section coordinate σ, draping of outlines and fills
 // onto facet planes, and convex slabs from half-spaces.
-// Contract: a380/notes/CONTRACT.md. Design: a380/DESIGN.md §5.1, §5.7, §8.7, §9 (M6).
+// Design: a380/DESIGN.md §5.1, §5.7, §8.7, §9 (M6).
 // Boundaries (W.SHELL): fus.B1 15.80-18.5 full S0; B2 (z >= 4.40); B3 (4.40-7.90); B4 (5.05-7.90) with
 //   B4belly.{l,r} slabs; U.wall.{l,r} upper-belt strips 7.90-9.15; U.crown (cut.up, z >= 9.162);
 //   B5 (4.40-5.15); M.wall.{l,r} main-belt strips; M.chunk (cut.md, z >= 6.462); B6; UY.wall.{l,r};

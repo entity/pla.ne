@@ -1,4 +1,4 @@
-// hull3.mjs: convex polyhedra for the 3D mode's T.hull (kit patch 6, a380/notes/kit-patches.md).
+// hull3.mjs: convex polyhedra for the 3D mode's T.hull (kit patch 6).
 // convexHull3(points) builds the convex hull of a point set as merged planar faces with outward normals.
 // clipHull(points, n, d) keeps the part of the hull of `points` with n·p <= d. Pure, Node and browser.
 

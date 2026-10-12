@@ -749,7 +749,7 @@ const A3M8 = (() => {
     active: (fx) => on("windows") && ((fx.pv.cabinLight ?? 0) > 1e-3 || st.doors.some((v) => v > 1e-3)),
     draw(fx, pass, spec) {
       const mask = ensureMask(fx);
-      const common = { ...mask, uDoors: st.doors, uCabin: [fx.pv.cabinLight, 0.85, st.blinds ?? 1, 0], uFirst: st.first, uNoDither: nd() };
+      const common = { ...mask, uCabin: [fx.pv.cabinLight, 0.85, st.blinds ?? 1, 0], uFirst: st.first, uNoDither: nd() };
       // a piece the page has faded out (an Inspect view) carries no lit windows either
       const faded = fadedRuns(fx);
       for (const w of M8.D.windows) {
@@ -759,7 +759,15 @@ const A3M8 = (() => {
         if (!part) continue;
         const boxes = bandsOf(fx, w, part);
         if (!boxes.length) continue;
-        const v = { ...common, ...poseOf(fx, w.group, "uG"), uPass: w.pass, uTarget: idOf(fx, w.part) };
+        // the piece's own tables (shaders.mjs windowPartData; one program draws every piece), as float32 once; uWDC's
+        // open term is each doorway's door channel this frame (st.doors by the doorway's slot; a missing one shut)
+        const T = w.table;
+        const u = (w.tableF ??= { uWP: new Float32Array(T.uWP), uWI: new Float32Array(T.uWI), uWR: new Float32Array(T.uWR), uWX: new Float32Array(T.uWX), uWB: new Float32Array(T.uWB), uWDA: new Float32Array(T.uWDA), uWDB: new Float32Array(T.uWDB), uWG: new Float32Array(T.uWG), uWDC: new Float32Array(4 * T.slots.length) });
+        T.slots.forEach((slot, k) => {
+          u.uWDC[4 * k] = T.sig0[k];
+          u.uWDC[4 * k + 1] = slot >= 0 ? st.doors[slot] ?? 0 : 0;
+        });
+        const v = { ...common, ...u, ...poseOf(fx, w.group, "uG"), uPass: w.pass, uTarget: idOf(fx, w.part) };
         for (const box of boxes) pass(v, box);
         probeInk(spec, `win:${w.part}`, part);
       }
@@ -848,11 +856,11 @@ const A3M8 = (() => {
         const phase = (fx.pv.fanPhase ? fx.pv.fanPhase[e.i] : 0) * e.sense;
         const R = e.r * 10 * k + 3;
         const box = [a.screen[0] - R, a.screen[1] - R, a.screen[0] + R, a.screen[1] + R];
-        const v = { ...mask, ...pose, uPass: e.i, uTarget: idOf(fx, e.part), uFirst: st.first, uNoDither: nd() };
+        const v = { ...mask, ...pose, uEng: e.eng, uPass: e.i, uTarget: idOf(fx, e.part), uFirst: st.first, uNoDither: nd() };
         // the once-per-rev mark: in with N1 from rest, out once its own blur passes a radian
         const mark = smooth(0.003, 0.03, n1) * (1 - smooth(0.8, 2.2, omega * st.exposure));
-        v[`uRun${e.i}`] = [phase, fx.calm ? stillGain(omega * st.exposure, 0.3) : blurGain(omega * st.exposure), n1, mark];
-        v[`uGain${e.i}`] = fx.calm ? fanGainsStill(omega, st.exposure, D.fan.blades) : fanGains(omega, st.exposure, D.fan.blades);
+        v.uRun = [phase, fx.calm ? stillGain(omega * st.exposure, 0.3) : blurGain(omega * st.exposure), n1, mark];
+        v.uGain = fx.calm ? fanGainsStill(omega, st.exposure, D.fan.blades) : fanGains(omega, st.exposure, D.fan.blades);
         pass(v, box);
         probeInk(spec, `eng:${e.n}`, box);
       }
@@ -872,7 +880,10 @@ const A3M8 = (() => {
         if (w.kind === "scan" && st.levels.wing <= 1e-3 && st.levels.engine <= 1e-3) continue;
         const box = boxOf(fx, w.part, 2);
         if (!box) continue;
-        pass({ ...common, ...poseOf(fx, w.group, "uG"), uPass: w.pass, uTarget: idOf(fx, w.part) }, box);
+        // the target's own tables (shaders.mjs washTargetData; one program draws every target), as float32 once
+        const T = w.table;
+        const u = (w.tableF ??= { uXP: new Float32Array(T.uXP), uXI: T.uXI, uXC: new Float32Array(T.uXC), uXK: T.uXK });
+        pass({ ...common, ...u, ...poseOf(fx, w.group, "uG"), uPass: w.pass, uTarget: idOf(fx, w.part) }, box);
         probeInk(spec, `wash:${w.part}`, box);
       }
     },

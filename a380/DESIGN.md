@@ -1,5 +1,9 @@
 # A380 figure: design (revision 2)
 
+> References to `notes/` (status, audits, kit patches, the module contract, follow-up packages) point to the
+> working notes kept while the figure was built. They are not part of this repository; the code and these
+> documents carry the decisions that matter.
+
 This is the design for `a380/a380.html` (dark) and `a380/a380-light.html` (light), written by
 `node a380/build.mjs [--light]`. It replaces revision 1 after three critics' reviews (feasibility, fidelity, craft).
 Every finding and how it was resolved is in §12. The work is done by these roles:

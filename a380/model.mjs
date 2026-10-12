@@ -1,3 +1,4 @@
+// @ts-check
 // a380/model.mjs: the Airbus A380-800 truth model for the figure.
 //
 // Pure ESM: no imports, no Node or DOM APIs, no clock or random sources. Inlined into the page and
@@ -824,6 +825,11 @@ export function phaseState(id) {
 // ---------------------------------------------------------------------------------------------
 // state and dynamics
 // ---------------------------------------------------------------------------------------------
+/**
+ * The aircraft's state as step() advances it (doors, gear, high-lift, engines, flight path, lights, the cabin dimmer
+ * and blinds, the tug): what initialState() returns.
+ * @typedef {ReturnType<typeof initialState>} State
+ */
 /** The rest state: parked at the gate (GATE targets already reached). */
 export function initialState() {
   const t = phaseState("GATE");
@@ -855,6 +861,10 @@ const confDrive = (slatDeg, flapDeg) => [invMap(SLAT_MAP, slatDeg), invMap(FLAP_
  * Advance the state by dt seconds toward the phase targets with the real rates. Pure: returns a new
  * state. dt is real (aircraft) time; a figure that compresses time passes dt * compression, in
  * sub-steps of at most 0.1 s (step does this itself).
+ * @param {State} state
+ * @param {ReturnType<typeof phaseState>} target
+ * @param {number} dt seconds
+ * @returns {State}
  */
 export function step(state, target, dt) {
   let s = deepCopy(state);

@@ -14,8 +14,9 @@ self-contained web page.
 
 ## Try it
 
-Open `a380/a380.html` (dark) or `a380/a380-light.html` (light) in a browser. Each page is a single file with no
-network requests, for use offline. The hosted site (`node a380/tools/build-site.mjs`) is one page, `index.html`, with a
+The live site is https://air.pla.ne. For use offline, download `a380.html` (dark) or `a380-light.html` (light) from
+the [latest release](https://github.com/entity/pla.ne/releases/latest), or build them with `npm run build`. Each page is
+a single file with no network requests. The hosted site (`node a380/tools/build-site.mjs`) is one page, `index.html`, with a
 System / Light / Dark switch that changes the theme in place without losing the flight, the view or the turntable.
 
 Controls: drag to turn · `1`–`7` flight phases · `C` cutaway · `D` doors · `I` / `Shift+I` close-up views ·
@@ -23,14 +24,19 @@ Controls: drag to turn · `1`–`7` flight phases · `C` cutaway · `D` doors ·
 
 ## Build it
 
-Requires Node.js 20.10 or later; there is nothing to install.
+Requires Node.js 20.10 or later. The figure itself needs nothing installed; `npm install` adds only the
+development tools (TypeScript for the type check, Wrangler for the deploy).
 
 ```sh
-node a380/build.mjs                 # a380/a380.html
-node a380/build.mjs --light         # a380/a380-light.html
-node a380/build.mjs --check         # the figure's own checks
-node a380/tools/build-site.mjs      # a380/dist/: the one-page static site with the theme switch (a380/site/DEPLOY.md)
+npm run build       # a380/a380.html and a380/a380-light.html, the single-file pages
+npm run check       # the figure's own checks and the flight-model test
+npm run typecheck   # tsc over the files marked // @ts-check
+npm run site        # a380/dist/: the one-page static site with the theme switch (a380/site/DEPLOY.md)
+npm run serve       # serve a380/dist on http://127.0.0.1:8741/ the way a host would
+npm run deploy      # build the site and upload it to Cloudflare (wrangler.jsonc)
 ```
+
+Each script is a plain `node` command (see `package.json`), so they also run without npm.
 
 The audits and browser checks (headless Chromium) are described in [`a380/README.md`](a380/README.md).
 
@@ -41,6 +47,10 @@ The audits and browser checks (headless Chromium) are described in [`a380/README
 - `kit/`: the drawing kit from the [Anatomy](https://github.com/wheresryan22/anatomy) skill, extended with the 3D
   turn runtime and the WebGL painter (MIT, see `kit/LICENSE`).
 - `scripts/`: headless-browser capture, drive and check scripts from the same skill.
+
+## Licence
+
+MIT, see [`LICENSE`](LICENSE). The drawing kit in `kit/` keeps its own MIT licence (`kit/LICENSE`).
 
 Not affiliated with or endorsed by Airbus. Dimensions and procedures come from public Airbus and EASA documents;
 values marked as estimates in `a380/truth.md` are estimates.

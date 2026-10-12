@@ -414,7 +414,7 @@ export function orbit(T, R, P, options = {}) {
   const E = ((P.elevation ?? 30) * Math.PI) / 180;
   const result = { separation: [], unseparated: [], cycles: [], forced: [], swaps: [], layers: [], rigid: [], swept: [], posed: [], folds: [], self: [], crowding: [], endon: [], coverage: [], depth: [], continuity: [], notes: [], stats: {}, quick, skipped: Object.keys(ORBIT_LINES).filter((line) => ORBIT_LINES[line] && !wants(ORBIT_LINES[line])) };
   const families = familiesOf(T, { sweep, clips });
-  // ---- f3-engine: per-view camera elevation (a380/notes/followup/f3-engine.md E1) -----------------------------------
+  // ---- f3-engine: per-view camera elevation (E1) -----------------------------------
   // `elevations`: the extra camera elevations the page shows (T.build's `elevations`); the sweep (or, with
   // elevated: "all", every family) is audited again at each of them, as `<family>@<e>°`. A state carrying `$elevation`
   // (any family's) is audited at its elevation: order and swaps through its cameras, and the depth oracle, routes and
@@ -435,7 +435,7 @@ export function orbit(T, R, P, options = {}) {
     return e === null || e === baseE ? P : { ...P, elevation: e };
   };
   // ---- f3-engine end ----------------------------------------------------------------------------------------------
-  // kit patch 13 (a380/notes/kit-patches.md): groups the figure does not draw in a state (a parked free group, 10 km
+  // kit patch 13: groups the figure does not draw in a state (a parked free group, 10 km
   // up) are absent from it: no order pairs, swaps, posed pairs, clip steps or depth items involve their parts there
   const groupIndex = new Map(groups.map((g) => [g.name, g.index]));
   const goneOf = (values) => {
@@ -684,7 +684,7 @@ export function orbit(T, R, P, options = {}) {
         seen++;
         for (const w of adj[v]) if (--indeg[w] === 0) queue.push(w);
       }
-      // f4-engine (a380/notes/followup/f4-engine.md, the cycle rule): the runtime opens a cycle no thin edge opens by
+      // f4-engine (the cycle rule): the runtime opens a cycle no thin edge opens by
       // dropping its edge whose frames overlap least, under TURN.sliver px² (an order that can be wrong on less area
       // than the swaps line's least real overlap); the same here, on the cycles left, each drop noted. A cycle without
       // such an edge is reported as before, and the swaps and depth lines still judge the frames drawn
@@ -1410,7 +1410,7 @@ export function orbitOrExit(T, R, P, { flag = "--audit", argv = process.argv, ..
   return result;
 }
 
-// ---- f3-engine: the riding pass (a380/notes/followup/f3-engine.md E4) -----------------------------------------------
+// ---- f3-engine: the riding pass (E4) -----------------------------------------------
 // The kit audit (audit.mjs) checks support at rest, where every group is at 0. A part that rides a moving piece (an
 // overhead panel carried by a lifting canopy) is supported only by that piece in its moved pose, and a pass that drops
 // the moving piece (a cutaway pass) finds it loose. `riding` poses every solid and tube at one reachable state

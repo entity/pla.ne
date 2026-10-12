@@ -1,7 +1,7 @@
 // a380/parts/skin.mjs (M6): Skin: belly fairing, keel liner, passenger and cargo doors, 218 windows, beacons,
 // antennas, lamps, surface detail.
 //
-// Contract: a380/notes/CONTRACT.md. Design: a380/DESIGN.md §3.1, §5.1, §5.7, §5.10, §6.2, §8.7, §9 (M6).
+// Design: a380/DESIGN.md §3.1, §5.1, §5.7, §5.10, §6.2, §8.7, §9 (M6).
 // Groups: door.{ID}.arm (hinge on W.partAt's group, axis the arm facet's in-plane up vector at the door's
 //   forward edge, 0.03 m off the skin) > door.{ID} (the parallel axis at the arm's end), 16 doors; door.FWD
 //   and door.AFT (top-hinged on pitch). Rules from channels door.{ID}.

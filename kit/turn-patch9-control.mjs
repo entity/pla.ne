@@ -1,4 +1,4 @@
-// Kit patch 9 control (a380/notes/kit-patches.md 9): a hinge pair that bulges between its sampled extremes.
+// Kit patch 9 control: a hinge pair that bulges between its sampled extremes.
 //
 //   node kit/turn-patch9-control.mjs
 //
