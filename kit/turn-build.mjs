@@ -748,7 +748,7 @@ export function turning(P, { recorder = null, scale = 1 } = {}) {
     const name = options.name ?? `${kind}#${T.parts.length}`;
     const material = options.material ?? null;
     if (material && !TURN.materials.includes(material)) throw new Error(`turning: part ${name} has material ${material}; use one of ${TURN.materials.join(", ")}`);
-    return { id: T.parts.length, name, kind, group, layer, owner: options.owner, tone: options.tone ?? "hi", crease: options.crease ?? "faint", lit: Boolean(options.lit), material, cls: options.cls ?? null, details: options.details ?? {}, shapes: [], planes: [], dots: [], samples: [], hints: [], rerank: options.rerank ?? 0 }; // f3-engine: rerank (a380/notes/followup/f3-engine.md E3)
+    return { id: T.parts.length, name, kind, group, layer, owner: options.owner, tone: options.tone ?? "hi", crease: options.crease ?? "faint", lit: Boolean(options.lit), material, cls: options.cls ?? null, details: options.details ?? {}, shapes: [], planes: [], dots: [], samples: [], hints: [], rerank: options.rerank ?? 0 }; // f3-engine: rerank (E3)
   };
   const record = (part, shape) => {
     shape.name = shape.name ?? part.name;
@@ -895,7 +895,7 @@ export function turning(P, { recorder = null, scale = 1 } = {}) {
     record(part, A.solid(F, profile, { name: part.name }));
     part.world = { F, s0, s1, r0, r1, ends, profile };
     part.spec = { F: { o: local(part.group, F.o), a: F.a, u: F.u, v: F.v }, s0, s1, r0, r1, ends, ...(options.bands === 13 ? { hb: 1 } : {}) };
-    // ---- f3-engine: round joints (a380/notes/followup/f3-engine.md E2) ----------------------------------------------
+    // ---- f3-engine: round joints (E2) ----------------------------------------------
     // `jointCaps: { first, last }` (as a ring-loft hull's, kit patch 15): the end ring at s0 (first) or s1 (last) is a
     // joint with the next piece of the same continuous skin (a nacelle's next cowl row); the round's outline on it is
     // drawn as a faint (or "mid") seam instead of the outline. A joint end is open or flat, not a dome; its cap face is
@@ -1069,7 +1069,7 @@ export function turning(P, { recorder = null, scale = 1 } = {}) {
     return part;
   };
 
-  // T.hull (kit patch 6, a380/notes/kit-patches.md): a convex polyhedron from points (faceted), or a ring loft
+  // T.hull (kit patch 6): a convex polyhedron from points (faceted), or a ring loft
   // (consecutive planar convex rings) with smooth tone bands, optionally clipped by flats { n, d } (keep n·p <= d).
   T.hull = (options) => {
     const part = common(options, "hull");
@@ -1175,7 +1175,7 @@ export function turning(P, { recorder = null, scale = 1 } = {}) {
     if (joints.length > 30) throw new Error(`turning: hull ${name}: at most 30 joint planes`);
     const jointTol = Math.max(1e-3, 1e-6 * size);
     const JV = hull.points.map((p) => joints.reduce((mask, j, bit) => (Math.abs(dot3(j.n, p) - j.d) <= jointTol ? mask | (1 << bit) : mask), 0));
-    // f3-engine (a380/notes/followup/f3-engine.md E4): `shell: { t, open }` (or a number t, kit units): the recorded solid is
+    // f3-engine (E4): `shell: { t, open }` (or a number t, kit units): the recorded solid is
     // a shell t thick, its inside a cavity open through the faces whose outward normals are in `open` (the piece's cuts;
     // audit.mjs sdf), for a hull that is one piece of a hollow skin with parts inside it
     // (`open: "flat"`: every flat face, the closing cuts of a smooth ring-loft piece)
@@ -1190,7 +1190,7 @@ export function turning(P, { recorder = null, scale = 1 } = {}) {
       E: creases,
       ...(joints.length && JV.some((m) => m) ? { JV, JT: joints.map((j) => j.t) } : {}),
     };
-    // f3-engine (a380/notes/followup/f3-engine.md E5): `subBands`, the smooth faces' sub-bands per tone step (default 3,
+    // f3-engine (E5): `subBands`, the smooth faces' sub-bands per tone step (default 3,
     // kit patch 15's 13 levels; 6 gives 25 levels, a step of half the size, for a long smooth face lit mostly by its
     // angle round an axis, e.g. the radome). Its own face roles and thresholds at runtime; the ramp's knots are the same
     if (options.subBands !== undefined && options.subBands !== 3) {
@@ -1556,7 +1556,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
   const P = T.P;
   const started = Date.now();
   const states = statesOf(T, poses);
-  // ---- f3-engine: per-view camera elevation (a380/notes/followup/f3-engine.md E1) -----------------------------------
+  // ---- f3-engine: per-view camera elevation (E1) -----------------------------------
   // `elevations`: the camera elevations (degrees) the page may show besides P.elevation (an Inspect view looking down
   // more steeply), and any `$elevation` a state carries. Every screen-space step of the build runs at each of them as
   // well: which pairs can overlap on screen (so get a plane or a dynamic test), the slots a part's levels need, and the
@@ -1568,7 +1568,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
   const fixedParts = extraE.length ? T.parts.filter((part) => part.kind === "fixed").map((part) => part.name) : [];
   if (fixedParts.length) throw new Error(`turning: elevations ${extraE.join(", ")} declared, but ${fixedParts.length} part${fixedParts.length === 1 ? " is" : "s are"} pre-drawn SVG at P.elevation ${baseE} (T.fixed: ${fixedParts.slice(0, 6).join(", ")}): make them solids, or show no other elevation`);
   const atE = (values, e) => ({ ...values, $elevation: e });
-  // round joints (a380/notes/followup/f3-engine.md E2): each joint ring's neighbour, the round of the same group on the
+  // round joints (f3-engine E2): each joint ring's neighbour, the round of the same group on the
   // same axis whose end ring is that ring; its slope dr/ds in this round's s lets the runtime keep the arc between the
   // two rounds' tangent points (the union's silhouette, where the slopes differ) as outline
   for (const part of T.parts) {
@@ -1636,7 +1636,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
   const camsFor = (group) => {
     const key = group ? group.index : -1;
     if (!sampleCams.has(key)) {
-      // groups sampled on the shared states share one camera list (a380/notes/kit-patches.md, patch 12): a
+      // groups sampled on the shared states share one camera list (kit patch 12): a
       // per-group copy cost groups × states full camera sets (minutes and tens of GB on a 150-group figure)
       const values = groupStates(T, group, states, { tumble: true });
       sampleCams.set(key, values === states ? stateCams() : values.map((v) => TURN.cams(scene, v)));
@@ -1777,7 +1777,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
   // kit patch 9: every distinct pose of a group in a frame, over all sampled states (deduplicated at 1e-4); at most
   // 256, thinned uniformly, and the 24 sampled poses of the framed search always among them
   const p9 = { failed: 0, reframed: 0, dynamic: 0, names: [], poses: 0, capped: 0, ms: 0 };
-  const rr = { near: 0, changed: 0, names: [] }; // f3-engine: re-ranked framed planes (a380/notes/followup/f3-engine.md E3)
+  const rr = { near: 0, changed: 0, names: [] }; // f3-engine: re-ranked framed planes (E3)
   const poseLists = new Map();
   const posesOf = (group, frame) => {
     const key = `${group ? group.index : -1}|${frame ? frame.index : -1}`;
@@ -1970,7 +1970,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
           const cb = B.flatMap((part) => framedCloud(part, common).filter((_, i) => fullClouds || i % 2 === 0));
           const hit = quickSeparate(ca, cb, [[0, 0, 1], ...A.flatMap((part) => part.hints).slice(0, 6).map((h) => toFrame(h, ga, common)), ...B.flatMap((part) => part.hints).slice(0, 6).map((h) => toFrame(h, gb, common))]);
           if (hit.margin < 0.1) continue;
-          // the plane was found on thinned clouds: it must also hold for every sample (a380/notes/kit-patches.md)
+          // the plane was found on thinned clouds: it must also hold for every sample
           if (marginOf(hit.n, A.flatMap((part) => framedCloud(part, common, true)), B.flatMap((part) => framedCloud(part, common, true))).margin < 0.1) continue;
           pairsOfGroups.push(keys[x], keys[y], common ? common.index : -1, hit.n[0], hit.n[1], hit.n[2]);
           settled.add(`${keys[x]}|${keys[y]}`);
@@ -2017,7 +2017,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
           const hints = [[0, 0, 1], ...a.hints, ...b.hints].map((h) => toFrame(h, a.group, common)).concat([[0, 0, 1], ...b.hints.map((h) => toFrame(h, b.group, common))]);
           let hit = quickSeparate(ca, cb, hints);
           let ok = hit.margin >= 0.1 && marginOf(hit.n, framedCloud(a, common, true), framedCloud(b, common, true)).margin >= 0.1;
-          // kit patch 9 (a380/notes/kit-patches.md): the plane must also hold in every distinct relative pose the
+          // kit patch 9: the plane must also hold in every distinct relative pose the
           // poses() list gives the two groups (deduplicated at 1e-4, at most 256, thinned uniformly), not only in the
           // 24 sampled ones; a plane that fails between them is searched again on those poses, else the pair is dynamic
           if (patch9 && ok && !(marginFlat(hit.n, poseCloud(a, common), poseCloud(b, common)) >= 0.1)) {
@@ -2030,7 +2030,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
             } else p9.dynamic++;
             if (p9.names.length < 12) p9.names.push(`${a.name} × ${b.name}${ok ? " (re-framed)" : " (dynamic)"}`);
           }
-          // ---- f3-engine: re-rank a near-touching framed plane (a380/notes/followup/f3-engine.md E3) ----------------
+          // ---- f3-engine: re-rank a near-touching framed plane (E3) ----------------
           // The plane above is picked on thinned clouds (32 points a part per sampled state) and only validated on the
           // full ones, so a candidate the thin clouds overrate can win with a full-cloud margin far under another's: a
           // rounded door leaf's corner planes made tail.aft × door.M5R.leaf.hi pick the cone's door facet (0.12 units)
@@ -2102,7 +2102,7 @@ function build(T, { statics = [], verify = false, poses = null, strict = true, f
   });
   const packed = { ...pack({ ...data, parts: [] }), parts: pack3(data.parts) };
   // Frame axes keep 6 decimals (3 moved a wingtip 0.17 units at runtime), and T.split parts keep their spec
-  // unrounded: the runtime tests cut vertices against the cut plane to 1e-3 (a380/notes/kit-patches.md)
+  // unrounded: the runtime tests cut vertices against the cut plane to 1e-3
   const r6 = (v) => Math.round(v * 1e6) / 1e6;
   packed.parts.forEach((p, i) => {
     const F = data.parts[i].spec && data.parts[i].spec.F;

@@ -45,7 +45,7 @@ const QUICK = flag("quick");
 const CHECK = flag("check");
 const BENCH = flag("bench");
 const LITE = flag("lite");
-// f4-engine (a380/notes/followup/f4-engine.md): --elevations=42[,50] proves the order data at those camera elevations too
+// f4-engine: --elevations=42[,50] proves the order data at those camera elevations too
 // (T.build's `elevations`, kit E1) and adds the audit's sweep at each (`sweep@42°`); no option, no change. For a view
 // that will adopt `$elevation` (the Cockpit view) and for the full audit's elevated shard
 const ELEVATIONS = (option("elevations") ?? "").split(",").filter(Boolean).map(Number);
@@ -397,12 +397,12 @@ if (TURN_CACHE && existsSync(TURN_CACHE)) {
   if (TURN_CACHE) writeFileSync(TURN_CACHE, JSON.stringify({ data: out.data, css: out.css, svg: out.svg, svgBare: out.svgBare, verify: out.verify, report: { parts: out.report.parts, groups: out.report.groups, layers: out.report.layers, seconds: out.report.seconds } }));
 }
 report(`built ${out.report.parts} parts, ${out.report.groups} groups in ${out.report.seconds.toFixed(1)} s · ${out.report.layers.map((l) => `${l.name}: ${l.parts} parts, ${l.planar} planar, ${l.framed} framed, ${l.groupPairs} group pairs, ${l.dynamic} dynamic`).join(" · ")}`);
-// kit patch 9 and the framed-plane sets (a380/notes/kit-patches.md 9, 23): what they did, logged with the build
+// kit patch 9 and the framed-plane sets (kit patches 9, 23): what they did, logged with the build
 if (out.report.patch9) {
   const p9 = out.report.patch9;
   report(`patch 9: framed planes checked on every distinct relative pose (at most ${p9.poses} per group and frame, ${p9.capped} lists capped at 256): ${p9.failed} planes failed between the 24 sampled poses, ${p9.reframed} framed again, ${p9.dynamic} left dynamic${p9.names.length ? ` (${p9.names.join(", ")}${p9.failed > p9.names.length ? ", …" : ""})` : ""}`);
 }
-// f3-engine (a380/notes/followup/f3-engine.md E1, E3): the extra elevations proved, the re-ranked framed planes (if any)
+// f3-engine (E1, E3): the extra elevations proved, the re-ranked framed planes (if any)
 if (out.report.elevations && out.report.elevations.length > 1) report(`elevations: order data proved at ${out.report.elevations.join("°, ")}°`);
 if (out.report.rerank && out.report.rerank.near) report(`rerank: ${out.report.rerank.near} near-touching framed planes, ${out.report.rerank.changed} re-ranked${out.report.rerank.names.length ? ` (${out.report.rerank.names.join(", ")})` : ""}`);
 if (out.report.subPairs) {
@@ -610,7 +610,7 @@ if (AUDIT) {
     console.log(`kit audit · ${pass.name}`);
     A.auditOrExit(pass.R, P, { argv: [...argv, "--audit"] });
   }
-  // f3-engine (a380/notes/followup/f3-engine.md E4): the riding pass. The cutaway pass above drops the lifted cut
+  // f3-engine (E4): the riding pass. The cutaway pass above drops the lifted cut
   // pieces, so a part that rides one (a panel carried by the canopy) cannot be supported there; here every group is
   // posed in the open state (the cut pieces lifted, the free groups synced), the cut pieces' own parts held, and every
   // other solid must reach them or the ground (kit/turn-audit.mjs riding)

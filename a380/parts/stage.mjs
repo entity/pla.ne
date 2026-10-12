@@ -1,5 +1,5 @@
 // a380/parts/stage.mjs (M1): Stage: plinth, platter, phase-keyed marking sets, shadow, runway lights.
-// Contract: a380/notes/CONTRACT.md. Design: a380/DESIGN.md §2, §4, §5.2, §6.1, §6.2 (runway row), §7.5, §9 M1.
+// Design: a380/DESIGN.md §2, §4, §5.2, §6.1, §6.2 (runway row), §7.5, §9 M1.
 //
 // Files: a380/parts/stage.mjs, a380/gl/runway.mjs (GLSL generator, Node), a380/gl/runway.js (page: drawRunway and
 // the deck writer). Groups: none (the platter rides `air`, layer `deck`; the plinth is static on `back`).

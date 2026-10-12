@@ -1,6 +1,6 @@
 // a380/parts/tail.mjs (M2): Tail: tail shell lofts, fin, rudders, tailplanes, elevators, APU, tail lights.
 //
-// Contract: a380/notes/CONTRACT.md. Design: a380/DESIGN.md §3.1, §5.1, §5.3, §9 (M2). Notes: a380/notes/modules/M2.md.
+// Design: a380/DESIGN.md §3.1, §5.1, §5.3, §9 (M2).
 //
 // Shell (W.SHELL via W.loft, smooth ring-loft hulls): tail.aft 46.5–52.25, tail.cone 52.25–66 (one segment: its
 // crown facet and main-belt facets are planes), tail.tip 66–70.4 (tapered to the APU exhaust end).
@@ -300,7 +300,7 @@ export function groups(ctx) {
 
 // parts kept for checks()
 const BUILT = {};
-// follow-up item 23 (not fixed, a380/notes/followup/wings.md): moving the elevators' hinge and nose aft of the fixed TE
+// follow-up item 23 (not fixed): moving the elevators' hinge and nose aft of the fixed TE
 // face by W.GAP (12 mm) or W.GAP/2 made the browser order check at turn 220 (elevators at 0) worse (three pairs, one with
 // the platter, instead of one), so the elevators stay tangent to the TE face (offset 0)
 const ELEV_AFT = (W) => 0 * W.GAP;

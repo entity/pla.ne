@@ -5,7 +5,7 @@
 // W.kit. Every ring is a planar section: y-planes for panels and devices, planes normal to a hinge axis where a
 // device's end must stay invariant while it turns (the droop and slat ends beside fixed strips).
 //
-// Hinge axes (notes in a380/notes/modules/M3.md):
+// Hinge axes:
 //   droop noses 1–2 share one axis along the inner LE face, under their lower aft edge (they droop, opening a
 //   wedge at the top); slats 2–7 share one axis along the outer LE face, aft of and below them (a circular track
 //   forward and down). Sharing an axis makes each run move as one body, so the gaps between its devices stay

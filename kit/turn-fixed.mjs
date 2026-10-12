@@ -4,7 +4,7 @@ const T3_RAD = Math.PI / 180;
 const T3_LB = [0, 0.2, 0.42, 0.62];
 const T3_EB = [0.25, 0.5, 0.75];
 const T3_SOFT = 0.035;
-// kit patch 15 (a380/notes/kit-patches.md): smooth hull faces shade in T3_HK sub-bands per tone step (13 levels),
+// kit patch 15: smooth hull faces shade in T3_HK sub-bands per tone step (13 levels),
 // along a continuous facing ramp whose knots sit at the band centres, so curved lofts never step by a whole tone
 // and the lit half is not clamped at the top tone. Each sub-band is a `face` role with a constant ramp level.
 const T3_HK = 3;
@@ -19,7 +19,7 @@ const T3_HT = (() => {
   }
   return out;
 })();
-// f3-engine (a380/notes/followup/f3-engine.md E5): the sub-band thresholds for hk sub-bands per tone step (T3_HT is hk = 3), cached
+// f3-engine (E5): the sub-band thresholds for hk sub-bands per tone step (T3_HT is hk = 3), cached
 const t3BandCache = new Map();
 function t3BandsOf(hk) {
   let out = t3BandCache.get(hk);
@@ -377,7 +377,7 @@ function t3Roles(part) {
     const ends = part.kind === "round" ? spec.ends : spec.caps.map((cap) => (cap ? "flat" : "open"));
     ends.forEach((end, j) => end === "flat" && add(`k${j}`, "face"));
     if (crease !== "none") add("crease", "path", { cls: "iso-line iso-crease", tone: crease });
-    // f3-engine (a380/notes/followup/f3-engine.md E2): a round's end rings as joints, as a hull's (patch 15): its outline on a joint ring
+    // f3-engine (E2): a round's end rings as joints, as a hull's (patch 15): its outline on a joint ring
     // is a faint (or mid) seam, not the outline
     if (part.kind === "round" && spec.jt) {
       if (spec.jt.includes(0)) add("jf", "path", { cls: "iso-line", tone: "faint" });
@@ -1856,7 +1856,7 @@ function t3ArcPoints(geo, s, r, from, to, k, out, cut = false, angles = false) {
   }
 }
 
-// f3-engine (a380/notes/followup/f3-engine.md E2): mark the outline points from `from` on as lying on end ring `end`
+// f3-engine (E2): mark the outline points from `from` on as lying on end ring `end`
 // when that ring is a joint (p.j = 4 · end + tone + 1)
 // The ring's points the neighbour round's outline also passes through are the union's silhouette there (the arc between
 // the two rounds' tangent points where their slopes differ) and stay outline: only the rest of the arc is seam
@@ -2263,7 +2263,7 @@ function t3EmitRound(run, cam, f) {
       buf[2 * j + 1] = p[1];
     });
     for (let j = 0; j < pts.length; j++) skip[j] = pts[j].cut && pts[(j + 1) % pts.length].cut ? 1 : 0;
-    // f3-engine (a380/notes/followup/f3-engine.md E2): a segment with both ends on the same joint ring is a seam (jf / jm), not outline
+    // f3-engine (E2): a segment with both ends on the same joint ring is a seam (jf / jm), not outline
     let joints = 0;
     if (run.jt !== null)
       for (let j = 0; j < pts.length; j++) {
@@ -3214,7 +3214,7 @@ function t3EmitTube(run, cam, f) {
   f.hullN = 0;
 }
 
-// ---- T.hull runtime (kit patch 6, a380/notes/kit-patches.md): convex polyhedra, faceted or ring lofts with
+// ---- T.hull runtime (kit patch 6): convex polyhedra, faceted or ring lofts with
 // smooth tone bands. Flat faces (caps, clip flats, faceted hulls) are `face` roles with the kit's smoothed
 // staircase; smooth faces are drawn into the round's tone sheets s0..s4, cut along the iso-lines of the facing
 // score interpolated linearly over each face's fan triangles, so the bands slide continuously as the part turns.
@@ -3274,7 +3274,7 @@ function t3PrepareHull(run, part) {
     run.fv.set(face.v, run.fo[j]);
     if (face.c) run.fc.set(face.c.subarray(0, face.v.length), run.fo[j]);
   }
-  // f3-engine (a380/notes/followup/f3-engine.md E5): a hull's own sub-band count, `spec.hk` sub-bands per tone step (T.hull's `subBands`)
+  // f3-engine (E5): a hull's own sub-band count, `spec.hk` sub-bands per tone step (T.hull's `subBands`)
   run.hk = part.spec.hk ?? T3_HK;
   run.ht = run.hk === T3_HK ? T3_HT : t3BandsOf(run.hk);
   run.hRoles = Int32Array.from({ length: run.ht.length + 1 }, (_, t) => run.role[`h${t}`] ?? -1);
@@ -3469,7 +3469,7 @@ function t3EmitHull(run, cam, f) {
   // the sheets as lists joined once (a380 perf, kit-patches.md 19): a string grown by += is a rope the canvas painter
   // flattened on its first read every frame
   // (the 13 lists are the run's own, emptied each frame)
-  // f3-engine (a380/notes/followup/f3-engine.md E5): the part's own sub-band count (spec.hk sub-bands per tone step; 3 by default)
+  // f3-engine (E5): the part's own sub-band count (spec.hk sub-bands per tone step; 3 by default)
   const HT = run.ht ?? T3_HT;
   const HN = HT.length + 1;
   const HK = run.hk ?? T3_HK;
@@ -3686,7 +3686,7 @@ function t3Apart(A, an, B, bn, pad) {
   return false;
 }
 
-// f4-engine (a380/notes/followup/f4-engine.md, the cycle rule): the area (px²) where two frames' convex pieces (the hull,
+// f4-engine (the cycle rule): the area (px²) where two frames' convex pieces (the hull,
 // or a tube's quads) overlap, summed over the piece pairs (an upper bound of the fills' overlap); it stops counting
 // at `limit`. Only a stalled sort's cold pass calls it
 const T3_SLIVER = 0.25;
@@ -4231,7 +4231,7 @@ function t3Order(layer, frames, cams, previous, stats, scene) {
               }
             }
           }
-          // f4-engine (a380/notes/followup/f4-engine.md, the cycle rule): a cycle no apart or thin edge opens, met again in
+          // f4-engine (the cycle rule): a cycle no apart or thin edge opens, met again in
           // the cold pass (so a warm GJK side is not the cause), drops its edge whose frames overlap least if that area is
           // under T3_SLIVER px² (the audit's least real overlap): the frames' hulls hold the fills, so the order of that
           // pair can differ from the true one on less than that area. A forced pick (every edge into one part dropped)
@@ -4354,7 +4354,7 @@ function t3Keep(values) {
   return keep;
 }
 
-// ---- f3-engine: per-view camera elevation (a380/notes/followup/f3-engine.md E1) -------------------------------------
+// ---- f3-engine: per-view camera elevation (E1) -------------------------------------
 // A state may carry `$elevation` (degrees, 0 < e < 90): the cameras of that state look down at that elevation instead of
 // the projection's P.elevation, keeping its azimuth, scale and origin. The order's stored planes are planes in 3D (valid
 // from any view); only which side faces the reader depends on the view vector, and t3Order reads it from these cameras.

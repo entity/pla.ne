@@ -1,5 +1,9 @@
 # Airbus A380-800 Â· Fig 1
 
+> References to `notes/` (status, audits, kit patches, the module contract, follow-up packages) point to the
+> working notes kept while the figure was built. They are not part of this repository; the code and these
+> documents carry the decisions that matter.
+
 An interactive, true-3D cutaway drawing of an Airbus A380-800 on a turntable, built with the Anatomy skill's 3D mode
 (`kit/turn-build.mjs`, `kit/turn.mjs`) and WebGL (`kit/gl.mjs`) for every light, glow and effect. It is one
 self-contained HTML page with no network requests:
@@ -585,6 +589,6 @@ Features the figure does not have yet, each costed in `notes/followup/PLAN.md` Â
 - `parts/` (stage, nose, fuselage, skin, wings, tail, engines, gear, cabin with `cabin-plan.mjs` and
   `cabin-furniture.mjs`, lights, tug), `gl/` (shaders, passes, mask, runway);
 - `tools/` (model test, stowed-gear test, the sharded full audit, path checks, captures);
-- `DESIGN.md`, `truth.md`, `notes/` (status, audits, kit patches, GL and 3D cookbooks, the module contract).
+- `DESIGN.md`, `truth.md`.
 - Captures of the finishing round's merge are in `shots/f3-merge/` (each track's in `shots/f3/<track>/`), of the release in `shots/final-3/` and of the finished figure in `shots/final-4/` locally, those of the follow-up merges in `shots/sort-merge/`,
   `shots/followup-ship/` and `shots/followup-merge-1/` (`a380/shots/` is not committed).

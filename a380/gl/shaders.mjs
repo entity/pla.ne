@@ -20,7 +20,7 @@ const v3 = (a) => (typeof a === "string" ? a : `vec3(${f(a[0])},${f(a[1])},${f(a
  * glow, which goes into tonemap). The CSS (lights.mjs) is generated from this table; the page reads each token
  * through a probe's computed colour at GL init (gl/harness.js) and passes it as the uniform `uInk<Role>`. A page
  * carries one theme, so each program reads the one value its theme branch uses. Roles named here are the only
- * colours in the GLSL; the remaining literals are listed in notes/followup/lights.md with their reasons.
+ * colours in the GLSL; the remaining literals are each commented with their reason where they are written.
  */
 export const GL_INKS = {
   // lights and lamps (points, lamp lenses, runway lights)

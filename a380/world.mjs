@@ -29,7 +29,7 @@ export const kit = ([x, y, z]) => [UNIT * (PIVOT_X - x), UNIT * y, UNIT * z];
 export const kitDir = ([dx, dy, dz]) => [-dx, dy, dz];
 export const fromKit = ([X, Y, Z]) => [PIVOT_X - X / UNIT, Y / UNIT, Z / UNIT];
 export const m = (metres) => metres * UNIT; // a length in kit units
-/** Cross-group gap in metres (see notes/CONTRACT.md: 0.012 m, not DESIGN's 0.02, so the kit's 0.15-unit support touch still links the pieces). */
+/** Cross-group gap in metres (the module contract: 0.012 m, not DESIGN's 0.02, so the kit's 0.15-unit support touch still links the pieces). */
 export const GAP = 0.012;
 export const SIDES = [
   ["l", -1],

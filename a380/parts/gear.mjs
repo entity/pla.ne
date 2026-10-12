@@ -1,7 +1,7 @@
 // a380/parts/gear.mjs (M5): the landing gear. Nose gear (2 wheels, steers ±70°, retracts forward), two wing gears
 // (4 wheels, retract inboard into the belly) and two body gears (6 wheels, rear axle steers, retract aft), each with
 // its fitting, knuckle, leg, oleo, bogie, two-link stay solved as a 4-bar, doors and lights.
-// Design: a380/DESIGN.md §5.6, §3.1–3.4; contract: notes/CONTRACT.md; notes: notes/modules/M5.md.
+// Design: a380/DESIGN.md §5.6, §3.1–3.4.
 //
 // Frames. Geometry is written in model metres (x aft, y starboard, z up) and converted once with W.kit; every
 // kinematic solve below works in kit units (x forward, y starboard, z up; rotations right-handed about kit axes).

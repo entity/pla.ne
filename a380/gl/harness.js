@@ -208,7 +208,7 @@ const A3GL = (() => {
       steps.push(Math.round(performance.now() - t0));
       if (!current && !queue.length) done(failed);
       // (review fu-1 tried polling between frames on a 4 ms timer: first light came 1.7-1.9 s later, 9.5 s against 7.7 s
-      // at load 20, so the poll stays once a frame; notes/followup/r1-lights.md)
+      // at load 20, so the poll stays once a frame; follow-up r1-lights)
       else requestAnimationFrame(step);
     };
     requestAnimationFrame(step);

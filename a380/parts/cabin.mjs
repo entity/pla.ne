@@ -1,7 +1,6 @@
 // a380/parts/cabin.mjs (M7): Cabin and flight deck: free groups cabin and cockpit, interiors of five cutaway bays, Inspect views.
 //
-// Design: a380/DESIGN.md §3.1, §3.3, §5.1 (W.CUT), §5.8, §5.10, §7.4, §8, §9 M7. Contract: a380/notes/CONTRACT.md.
-// Notes: a380/notes/modules/M7.md (what was built, boundaries assumed, audits, known issues).
+// Design: a380/DESIGN.md §3.1, §3.3, §5.1 (W.CUT), §5.8, §5.10, §7.4, §8, §9 M7.
 //
 // Groups. `cabin` and `cockpit` are free ROOT groups with origin kit [0, 0, 0]. Each carries a sync rule:
 // while synced its pose is exactly pitch's world pose (follow.mjs syncPose), otherwise F.PARKED (far above).

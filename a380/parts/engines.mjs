@@ -1,7 +1,6 @@
 // a380/parts/engines.mjs (M4): Engines: four Trent 970 nacelles, three-piece pylons into the wing LE, inlet fallback fans.
 //
-// Contract: a380/notes/CONTRACT.md. Design: a380/DESIGN.md §5.1 (W.NACELLE, W.WING), §5.5, §6.2, §6.3, §9 M4.
-// Notes: a380/notes/modules/M4.md.
+// Design: a380/DESIGN.md §5.1 (W.NACELLE, W.WING), §5.5, §6.2, §6.3, §9 M4.
 //
 // Per engine (model ENGINES.list; W.NACELLE[i] carries the rows and the three tangent planes):
 //   eng.n.lip       T.round  s 0 → 0.50 m, r 1.70 → 1.94, chrome. Its front cap is the inlet face: a plane holds
@@ -354,7 +353,7 @@ export function build(ctx) {
     const pyl = {};
     // Against the scaffold's full-chord wing stub (its boxes include the LE), pylon.fwd is clipped at the wing's
     // leading-edge line so --only=engines still builds; with M3's wing (box from the LE face, strips beside the
-    // pylon slots, DESIGN §5.4) it rises into the LE profile in full (notes/requests/M4.md, request 1).
+    // pylon slots, DESIGN §5.4) it rises into the LE profile in full.
     const fullChordStub = ctx.stubbed("wings") && !ctx.part(`wings.r.le.1`) && !ctx.part(`wings.r.le.gin.a`);
     const leFlat = () => {
       const A = k([M.wingAt(E.y0).le, E.y0, 0]);
