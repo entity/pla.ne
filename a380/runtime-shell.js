@@ -104,23 +104,12 @@ window.__A3RT = (() => {
         removeListener: (fn) => m.removeEventListener("change", fn),
       };
     };
-    const bound = new Map();
-    const document = new Proxy(realDoc, {
-      get(target, key) {
-        if (key === "addEventListener")
-          return (type, fn, opts) => {
-            R.docL.push([type, fn, opts]);
-            realDoc.addEventListener(type, fn, opts);
-          };
-        const v = Reflect.get(target, key, target);
-        if (typeof v !== "function") return v;
-        let b = bound.get(key);
-        if (!b || b.f !== v) bound.set(key, (b = { f: v, b: v.bind(target) }));
-        return b.b;
-      },
-      set: (target, key, value) => Reflect.set(target, key, value, target),
-      has: (target, key) => key in target,
-    });
+    // the document's listeners: build.mjs writes the body's document.addEventListener( calls as A3RT_docOn( (a Proxy
+    // for the document cost every document read a trap), so dispose() can remove them
+    const A3RT_docOn = (type, fn, opts) => {
+      R.docL.push([type, fn, opts]);
+      realDoc.addEventListener(type, fn, opts);
+    };
     const ResizeObserver = class extends W.ResizeObserver {
       constructor(cb) {
         super(cb);

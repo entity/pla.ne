@@ -861,7 +861,9 @@ const SOURCE_STAMP = { ...sourceStamp(join(HERE, "..")), at: new Date().toISOStr
 const body = [(PAINTER === "canvas" ? fixedScript() : turnScript()), glScript(), wrapModule("model.mjs", "M"), wrapModule("follow.mjs", "F"), pageFiles, install, live].join("\n");
 const shell = readFileSync(join(HERE, "runtime-shell.js"), "utf8");
 if (shell.split("/*@BODY@*/").length !== 2) throw new Error("build: runtime-shell.js must hold one /*@BODY@*/ marker");
-const runtime = shell.replace("/*@BODY@*/", () => body);
+const docOn = body.split("document.addEventListener(").length - 1;
+if (!docOn) throw new Error("build: no document.addEventListener( in the page body (runtime-shell.js tracks them as A3RT_docOn)");
+const runtime = shell.replace("/*@BODY@*/", () => body.replaceAll("document.addEventListener(", "A3RT_docOn("));
 // the page script's sections, each between markers (a380/tools/build-site.mjs splits the page there): the runtime, the
 // theme and the standalone page's boot (the payload inflated from the page, then boot())
 const section = (name, text) => `/*@a3:${name}@*/\n${text}\n/*@a3:${name}:end@*/`;
