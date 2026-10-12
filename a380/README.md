@@ -322,6 +322,24 @@ removes the old one. `runtime-shell.js` tracks every frame callback, timer, docu
 observer and WebGL context a boot starts, so a stopped figure leaves nothing running. The standalone pages are the same
 runtime and one theme with the payload deflated inside, as before.
 
+### Measured: the theme switch (2026-10-12, forge, Radeon 8060S through ANGLE GL, headless Chrome)
+
+Before is the release at 02ab044 (its two pages and the redirecting index); after is this tree.
+
+| | Before | After |
+|---|---|---|
+| Parity (`--reduced`; gate, take-off, doors, cutaway, Inspect Cockpit, Upper deck, Engine 2; `a380/tools/png-diff.mjs`, pixels over 8 levels) | | standalone pages 0–2 px of 792,288 per shot (max 9 levels); site page loaded in each theme 0 px (max 8); site page after a switch into each theme 0–14 px (max 10) |
+| State across a switch (`drive.mjs`, both ways) | | kept mid-tour, paused (model time identical), in Inspect and mid-transit, doors mid-swing, cutaway; System follows an emulated `prefers-color-scheme` change both ways and not while Light or Dark is chosen; console clean |
+| `turn-check --perf`, 1440 px, interleaved (task) | dark 13.84, 13.51 ms; light 14.09 | dark 13.61, 13.73 ms; light 13.54 |
+| `turn-check --perf`, 390 px, 4× CPU, interleaved (task) | 55.37, 55.39 ms | 54.68, 54.57, 54.74 ms |
+| Cold load, `site-check --timing` medians, desktop: mounted / first light | 302–310 / 6,424–6,505 ms | 287–299 / 6,401–6,503 ms |
+| Cold load, phone (390, 4× CPU, 4G): mounted / first light | 1,952–2,030 / 9,327–9,335 ms | 1,556–1,585 / 8,843–8,970 ms |
+| First visit, transfer (brotli / gzip), dark | 912 / 978 KB | 724 / 979 KB (index 34, runtime 196, theme 20 + 475) |
+| First visit, transfer (brotli / gzip), light | 878 / 943 KB | 695 / 945 KB |
+| A switch (prefetched): new figure on screen / its lights whole | | 0.8–0.9 s / 5.3–5.8 s at 1440; 2.4 / 7.2 s at 390 px, 4× CPU (the WebGL programs compile again in the new contexts, with the canvas fallback lights showing meanwhile) |
+| `build.mjs --check`, `scripts/lines.mjs` | | check passed (both themes); line ends 0 of 630 float (both pages and the site page) |
+| `site-check --layout` / `--nojs` | | passed, both themes, 320 × 568 to 1440 × 900 (44 px touch targets) |
+
 ## Measured: the finished figure (2026-10-11, 22:52–23:45 UTC)
 
 The shipping pages and `a380/dist/` were checked against `main` at 5f7c95b (sources identical to 92d6ad6:

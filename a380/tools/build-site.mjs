@@ -366,7 +366,7 @@ var m=document.querySelector('meta[name="color-scheme"]');if(m)m.content=t;
 m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="light"?"${PAGE_BG.light}":"${PAGE_BG.dark}";
 var A=${JSON.stringify(THEMES)};
 function pre(rel,href,fetch){var l=document.createElement("link");l.rel=rel;l.href=href;if(fetch){l.as="fetch";l.crossOrigin="anonymous"}document.head.appendChild(l)}
-pre("modulepreload",A[t].js);pre("preload",A[t].json,1)})();`;
+pre("modulepreload",${JSON.stringify(RUNTIME)});pre("modulepreload",A[t].js);pre("preload",A[t].json,1)})();`;
 // right after <body>: the picked theme on the page and on the figure's host, before the first paint
 const PAINT = `<script>(function(){var t=window.__a3site?__a3site.theme:"dark";document.body.setAttribute("data-theme",t)})()</script>`;
 // a classic inline script in <head>: shows the no-WebGL note from the figure's own GL state (window.__a380.glInfo,
@@ -565,7 +565,7 @@ const unescape = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(
     .filter((tag) => !["description", "color-scheme", "theme-color"].some((name) => tag.startsWith(`<meta name="${name}"`) && own(name)))
     .join("");
   const steps = [
-    [/<title>[^<]*<\/title>/, () => `<title>${esc(TITLE)}</title>${tags}<script>${PICK}</script><link rel="modulepreload" href="${RUNTIME}"><style id="site-css">${SITE_CSS}</style><script>${SITE_JS}</script>`],
+    [/<title>[^<]*<\/title>/, () => `<title>${esc(TITLE)}</title>${tags}<script>${PICK}</script><style id="site-css">${SITE_CSS}</style><script>${SITE_JS}</script>`],
     ['<body class="iso" data-theme="dark">', () => `<body class="iso" data-theme="dark">${PAINT}`],
     ['<main class="iso-page">', () => `<main class="iso-page">${NOTES(A.ogDark)}`],
     ['<figure class="iso-figure">', () => `<div class="iso a3-theme-host" data-theme="dark"><script>document.currentScript.parentNode.setAttribute("data-theme",window.__a3site?__a3site.theme:"dark")</script><figure class="iso-figure">`],
