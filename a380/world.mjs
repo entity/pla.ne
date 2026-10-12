@@ -1,3 +1,4 @@
+// @ts-check
 // a380/world.mjs (S): the A380 figure's analytic world (DESIGN §2, §3.4, §5.1, §8.7).
 //
 // Every shape two modules share is a function here; modules build against these, never against each
@@ -89,7 +90,12 @@ export const CUTS = {
 };
 export const COCKPIT_SYNC = 14.5; // cut.fd units at which the cockpit group syncs (DESIGN §3.3, §5.9)
 
-/** Rotation of a kit point about the pitch hinge, then lift and turn: the airframe's world pose. */
+/**
+ * Rotation of a kit point about the pitch hinge, then lift and turn: the airframe's world pose.
+ * @param {number[]} p a kit point [x, y, z]
+ * @param {{ turn?: number, lift?: number, pitch?: number }} [pose] degrees, kit units, degrees
+ * @returns {[number, number, number]}
+ */
 export function poseOf(p, { turn = 0, lift = 0, pitch = 0 } = {}) {
   const P0 = PITCH.point;
   const t = (pitch * Math.PI) / 180;
