@@ -22,7 +22,7 @@ import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { brotliCompressSync, constants, gzipSync } from "node:zlib";
+import { brotliCompressSync, constants, gzipSync, inflateRawSync } from "node:zlib";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const A380 = resolve(HERE, "..");
@@ -211,7 +211,6 @@ const DESCRIPTION =
   "An interactive, true-3D cutaway of the Airbus A380-800 on a turntable: all 19 doors, the 22-wheel gear, slats and flaps, four Trent 970s, every exterior light and both cabin decks, flying Airbus's departure from the gate to 10,000 ft.";
 const ALT = "The A380 drawn in 3D on a turntable slice of runway at take-off, its lights on";
 const PAGE_BG = { dark: "#0b0b0b", light: "#f2f2ef" };
-const NAMES = { dark: "a380.html", light: "a380-light.html" };
 
 if (existsSync(OUT)) {
   // only a folder this tool wrote (it carries the marker) is cleared
@@ -290,34 +289,92 @@ const head = ({ path, theme, title = TITLE, description = DESCRIPTION, og = them
     .filter(Boolean)
     .join("");
 
-// the site layer on a figure page: small and outside the figure. fu/f4-hosting: the site bar is a footer row in normal
-// flow after the figure (and the no-WebGL note just above it), so neither moves or shortens the card, which
-// fu/f3-interaction fits to the viewport's height. (fu/f3 hung the bar in the page's top margin, which interaction's
-// clamp(12px,4svh,64px), and 8 px on phones, left too small: the bar sat above the top of the page on every phone and
-// was clipped on a 1280 x 800 laptop.) Touch links are at least 44 px tall
+// ---------------------------------------------------------------------------------------------
+// the single page (theme switch): index.html is the figure itself, with a System / Light / Dark switch. The two built
+// pages hold the same runtime byte for byte (build.mjs: runtime-shell.js around the kit, the model, follow, the GL page
+// files and live.js) and differ only in their theme: the DATA factory (vary functions, labels, the M8 settings) and
+// the payload (the live layers' markup, the turn data, the GL data with its shaders and inks). So the site ships one
+// runtime and, per theme, a small script and a JSON payload, each under a content-hashed name. index.html picks the
+// theme before first paint, loads that theme only, and prefetches the other at idle after first light; a switch
+// remounts the figure in place from a snapshot of its state (A3.snapshot) while the old figure's last frame stays on
+// screen
+// ---------------------------------------------------------------------------------------------
+const SECTION = (text, name, theme) => {
+  const open = `/*@a3:${name}@*/\n`;
+  const a = text.indexOf(open);
+  const b = text.indexOf(`\n/*@a3:${name}:end@*/`);
+  if (a < 0 || b < a) fail(`the ${theme} page has no ${name} section (built before the theme switch? rebuild it)`);
+  return text.slice(a + open.length, b);
+};
+const split = {};
+for (const theme of ["dark", "light"]) {
+  const text = html[theme];
+  const open = text.indexOf('<script type="module">');
+  const close = text.lastIndexOf("</script>");
+  if (open < 0 || close < open || text.indexOf("<script", open + 1) >= 0) fail(`the ${theme} page must end in one module script`);
+  const boot = SECTION(text, "boot", theme);
+  const b64 = /atob\("([A-Za-z0-9+/=]+)"\)/.exec(boot)?.[1];
+  if (!b64) fail(`the ${theme} page carries no payload (a verify or svg-painter build?)`);
+  const payload = inflateRawSync(Buffer.from(b64, "base64"));
+  const p = JSON.parse(payload.toString("utf8"));
+  for (const key of ["deck", "airframe", "turn", "gl"]) if (p[key] === undefined) fail(`the ${theme} payload has no ${key}`);
+  split[theme] = { before: text.slice(0, open), after: text.slice(close + "</script>".length), runtime: SECTION(text, "runtime", theme), theme: SECTION(text, "theme", theme), payload, stamp: /window\.__a380Source = \{[^;\n]*\};/.exec(text)?.[0] ?? "" };
+}
+if (split.dark.runtime !== split.light.runtime) fail("the two pages' runtimes differ: build both from the same tree (--rebuild)");
+const unthemed = (s, theme) => s.replace(`<body class="iso" data-theme="${theme}">`, "<body>").replace(`<meta name="color-scheme" content="${theme}">`, "").replace(/<meta name="theme-color" content="[^"]*">/, "");
+if (unthemed(split.dark.before, "dark") !== unthemed(split.light.before, "light") || split.dark.after !== split.light.after) fail("the two pages' markup differs beyond the theme attributes");
+log(`one runtime for both themes (${(split.dark.runtime.length / 1024).toFixed(0)} KB); themes: dark ${(split.dark.theme.length / 1024).toFixed(0)} KB + ${(split.dark.payload.length / 1024).toFixed(0)} KB payload, light ${(split.light.theme.length / 1024).toFixed(0)} KB + ${(split.light.payload.length / 1024).toFixed(0)} KB payload`);
+const RUNTIME = asset("a380-runtime.js", Buffer.from(split.dark.runtime));
+const THEMES = Object.fromEntries(["dark", "light"].map((t) => [t, { js: asset(`a380-${t}.js`, Buffer.from(split[t].theme)), json: asset(`a380-${t}.json`, split[t].payload) }]));
+
+// the site layer: small and outside the figure. The site bar is a footer row in normal flow after the figure (and the
+// no-WebGL note just above it), so neither moves or shortens the card, which fu/f3-interaction fits to the viewport's
+// height. Touch targets are at least 44 px tall. The theme switch is three native radio buttons in a fieldset (arrow
+// keys move between them, a screen reader names the group and the choice)
 const SITE_CSS = `
 .site-bar{display:flex;justify-content:flex-end;margin:24px 0 0}
-.site-bar-row{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:12px;font-size:12.5px;line-height:1;color:var(--anatomy-muted)}
+.site-bar-row{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px 12px;font-size:12.5px;line-height:1;color:var(--anatomy-muted)}
 .site-bar a{color:var(--anatomy-text);text-decoration:none;border-radius:6px;padding:4px 8px}
 .site-bar a:hover{color:var(--anatomy-strong)}
 .site-bar a:focus-visible{outline:2px solid var(--anatomy-blue);outline-offset:1px}
-.site-theme{display:inline-flex;align-items:center;gap:2px;padding:2px;border-radius:8px;box-shadow:var(--anatomy-lift);background:var(--anatomy-card)}
-.site-theme a[aria-current="page"]{color:var(--anatomy-strong);background:var(--anatomy-faint)}
+.site-theme-row{display:inline-flex;align-items:center;gap:8px}
+.site-theme{display:inline-flex;align-items:center;gap:2px;margin:0;padding:2px;border:0;border-radius:8px;box-shadow:var(--anatomy-lift);background:var(--anatomy-card);min-inline-size:0}
+.site-theme legend,.site-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+.site-theme label{position:relative;display:inline-flex;cursor:pointer}
+.site-theme input{position:absolute;inset:0;width:100%;height:100%;margin:0;opacity:0;cursor:pointer}
+.site-theme span{display:inline-flex;align-items:center;padding:4px 9px;border-radius:6px;color:var(--anatomy-text);white-space:nowrap}
+.site-theme label:hover span{color:var(--anatomy-strong)}
+.site-theme input:checked+span{color:var(--anatomy-strong);background:var(--anatomy-faint)}
+.site-theme input:focus-visible+span{outline:2px solid var(--anatomy-blue);outline-offset:1px}
 .site-note{margin:0 0 16px;padding:12px 14px;border-radius:10px;background:var(--anatomy-card);box-shadow:var(--anatomy-lift);color:var(--anatomy-text);font-size:13px;line-height:1.5}
 #site-nogl{margin:24px 0 0}
 .site-note[hidden]{display:none}
 .site-note strong{color:var(--anatomy-strong);font-weight:600}
 .site-note img{display:block;width:100%;height:auto;margin-top:10px;border-radius:6px}
-@media (any-pointer:coarse){.site-bar a{display:inline-flex;align-items:center;min-height:44px;padding:0 14px}}
+.iso.a3-theme-host{display:contents}
+@media (any-pointer:coarse){.site-bar a,.site-theme span{display:inline-flex;align-items:center;min-height:44px;padding:0 12px}.site-bar a{padding:0 14px}}
 `.trim();
-// a classic inline script in <head>: remembers a theme choice; shows the no-WebGL note from the page's own GL state
-// (window.__a380.glInfo, read twice a second until it settles; it opens no context of its own); shows the cannot-start
-// note when the figure throws before it mounts or the browser lacks what the page's loader needs. Nothing per frame.
+// the theme, picked in <head> before anything is painted: ?theme=system|light|dark (stored, then taken off the address),
+// else the stored choice, else System; System follows prefers-color-scheme. It preloads the runtime's theme files
+const PICK = `(function(){var K="a380-theme",p=null,q=/[?&]theme=(system|dark|light)\\b/.exec(location.search);
+try{p=q?q[1]:localStorage.getItem(K);if(q)localStorage.setItem(K,q[1])}catch(_){}
+if(q&&history.replaceState)try{history.replaceState(history.state,"",location.pathname+location.search.replace(/([?&])theme=[^&]*(&|$)/,"$1").replace(/[?&]$/,"")+location.hash)}catch(_){}
+if(p!=="dark"&&p!=="light")p="system";
+var t=p==="system"?(window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark"):p;
+window.__a3site={pref:p,theme:t};
+var m=document.querySelector('meta[name="color-scheme"]');if(m)m.content=t;
+m=document.querySelector('meta[name="theme-color"]');if(m)m.content=t==="light"?"${PAGE_BG.light}":"${PAGE_BG.dark}";
+var A=${JSON.stringify(THEMES)};
+function pre(rel,href,fetch){var l=document.createElement("link");l.rel=rel;l.href=href;if(fetch){l.as="fetch";l.crossOrigin="anonymous"}document.head.appendChild(l)}
+pre("modulepreload",A[t].js);pre("preload",A[t].json,1)})();`;
+// right after <body>: the picked theme on the page and on the figure's host, before the first paint
+const PAINT = `<script>(function(){var t=window.__a3site?__a3site.theme:"dark";document.body.setAttribute("data-theme",t)})()</script>`;
+// a classic inline script in <head>: shows the no-WebGL note from the figure's own GL state (window.__a380.glInfo,
+// read twice a second until it settles; it opens no context of its own); shows the cannot-start note when the figure
+// throws before it mounts or the browser lacks what the page needs (ES modules, structuredClone). Nothing per frame.
 const SITE_JS = `(function(){
-var K="a380-theme";
 function show(id){var n=document.getElementById(id);if(n)n.hidden=false}
-document.addEventListener("click",function(e){var a=e.target&&e.target.closest&&e.target.closest("[data-theme-to]");if(!a)return;try{localStorage.setItem(K,a.getAttribute("data-theme-to"))}catch(_){}if(location.search)a.href=a.getAttribute("href").split("?")[0]+location.search});
-var old=!("DecompressionStream" in window)||!("noModule" in HTMLScriptElement.prototype);
+var old=!("noModule" in HTMLScriptElement.prototype)||!("structuredClone" in window);
 function check(){var A=window.__a380;if(!(A&&A.controller))show("site-fail")}
 window.addEventListener("error",function(){setTimeout(check,3000)});
 window.addEventListener("unhandledrejection",function(){setTimeout(check,3000)});
@@ -327,41 +384,201 @@ var n=0,t=setInterval(function(){var A=window.__a380,g=A&&A.glInfo;
 if(g&&g.pending===0){clearInterval(t);if(!g.ok)show("site-nogl")}else if(++n>240)clearInterval(t)},500)});
 })();`;
 const NOTES = (og) =>
-  `<noscript><style>.iso-figure{display:none}</style><p class="site-note"><strong>This figure needs JavaScript.</strong> It is an interactive drawing: turn it, open its doors, run its engines and step through the departure. Turn JavaScript on to use it; below is a still of it at take-off.<img src="${og}" alt="${esc(ALT)}" width="1200" height="630"></p></noscript>` +
+  `<noscript><style>.iso-figure{display:none}</style><p class="site-note"><strong>This figure needs JavaScript.</strong> It is an interactive drawing: turn it, open its doors, run its engines and step through the departure. Turn JavaScript on to use it; below is a still of it at take-off.<picture><source srcset="${A.ogLight}" media="(prefers-color-scheme: light)"><img src="${og}" alt="${esc(ALT)}" width="1200" height="630"></picture></p></noscript>` +
   `<p class="site-note" id="site-fail" role="alert" hidden><strong>The figure could not start in this browser.</strong> It needs a current Chrome, Edge, Firefox or Safari (16.4 or later). Below is a still of it at take-off.<img src="${og}" alt="${esc(ALT)}" width="1200" height="630" loading="lazy"></p>`;
 // the no-WebGL note sits after the figure, beside the site bar: the figure still works, and above it the note pushed the
 // card (fitted to the viewport's height) below the fold on a landscape phone
 const NOGL = `<p class="site-note" id="site-nogl" role="status" hidden><strong>WebGL is off or unavailable in this browser.</strong> Everything in the figure still works; its lights, glows and beams are drawn more simply, and the engines’ heat haze is not drawn.</p>`;
-const bar = (theme) =>
-  `<nav class="site-bar" aria-label="Site"><div class="site-bar-row"><span class="site-theme" role="group" aria-label="Theme">${["dark", "light"]
-    .map((t) => `<a href="${NAMES[t]}" data-theme-to="${t}"${t === theme ? ' aria-current="page"' : ""}>${t === "dark" ? "Dark" : "Light"}</a>`)
-    .join("")}</span><a href="credits.html">Credits</a></div></nav>`;
-
-// a meta tag the page already carries (fu/f3-interaction adds description, color-scheme and theme-color to the page's
-// own head) is kept and not added twice; the page's description then feeds the link-preview tags too
+const THEME_CHOICES = [["system", "System"], ["light", "Light"], ["dark", "Dark"]];
+const bar = () =>
+  `<nav class="site-bar" aria-label="Site"><div class="site-bar-row"><span class="site-theme-row"><span aria-hidden="true">Theme</span><fieldset class="site-theme"><legend>Theme</legend>${THEME_CHOICES.map(([v, label]) => `<label><input type="radio" name="a3-theme" value="${v}"${v === "system" ? " checked" : ""}><span>${label}</span></label>`).join("")}</fieldset></span><span class="site-sr" id="site-theme-said" aria-live="polite"></span><a href="credits.html">Credits</a></div></nav>` +
+  `<script>(function(){var p=window.__a3site&&__a3site.pref;if(p)for(var r of document.querySelectorAll('input[name="a3-theme"]'))r.checked=r.value===p})()</script>`;
+// the page's module script: boots the picked theme, then wires the switch. A switch (or, on System, a change of the
+// system's scheme while the page is open) loads the other theme (prefetched at idle after first light), takes the
+// figure's state (A3.snapshot: phase and model, bearing, Inspect, cutaway, doors, pause, the tour, the reader's
+// settings), stops the figure, and boots the other theme in a fresh copy of the figure's markup with that state. The
+// stopped figure's last frame stays over the new one until the new one has drawn its first frame. Its ids are renamed
+// so the new figure's markup resolves its own; the page keeps the old theme's colours meanwhile (body data-theme off,
+// its custom properties pinned), so neither figure takes the other's theme rules
+const BOOT = `const S = window.__a3site;
+const ASSETS = ${JSON.stringify(THEMES)};
+const KEY = "a380-theme";
+const RT = window.__A3RT;
+const BG = ${JSON.stringify(PAGE_BG)};
+const mq = matchMedia("(prefers-color-scheme: light)");
+const want = () => (S.pref === "system" ? (mq.matches ? "light" : "dark") : S.pref);
+const texts = {};
+const payloadText = (t) =>
+  (texts[t] ??= fetch(ASSETS[t].json).then((r) => {
+    if (!r.ok) throw new Error(\`a380: \${ASSETS[t].json}: \${r.status}\`);
+    return r.text();
+  })).catch((e) => {
+    delete texts[t];
+    throw e;
+  });
+const themeOf = async (t) => {
+  const [, text] = await Promise.all([import(new URL(ASSETS[t].js, document.baseURI).href), payloadText(t)]);
+  return { ...window.__A3THEME[t], p: JSON.parse(text) };
+};
+let host = document.querySelector(".a3-theme-host");
+for (const s of host.querySelectorAll(":scope > script")) s.remove();
+const template = host.cloneNode(true);
+host.setAttribute("data-theme", S.theme);
+let current = S.theme;
+let fig = (window.__a380Figure = await RT.boot(await themeOf(current)));
+const setMeta = (t) => {
+  const cs = document.querySelector('meta[name="color-scheme"]');
+  if (cs) cs.content = t;
+  const tc = document.querySelector('meta[name="theme-color"]');
+  if (tc) tc.content = BG[t];
+};
+// keep the page's look while two figures of different themes are in it
+const pinPage = () => {
+  const body = document.body;
+  const cs = getComputedStyle(body);
+  const pinned = [];
+  for (let i = 0; i < cs.length; i++) if (cs[i].startsWith("--")) pinned.push([cs[i], cs.getPropertyValue(cs[i])]);
+  for (const k of ["background-color", "color", "color-scheme"]) pinned.push([k, cs.getPropertyValue(k)]);
+  for (const [k, v] of pinned) body.style.setProperty(k, v);
+  body.setAttribute("data-theme", "switching");
+  return () => {
+    for (const [k] of pinned) body.style.removeProperty(k);
+  };
+};
+let freezes = 0;
+const freeze = (oldHost) => {
+  const figure = oldHost.querySelector(".iso-figure");
+  const n = ++freezes;
+  const ids = new Map();
+  for (const svg of figure.querySelectorAll("svg")) {
+    for (const e of svg.querySelectorAll("[id]")) {
+      ids.set(e.id, \`\${e.id}--was\${n}\`);
+      e.id = ids.get(e.id);
+    }
+  }
+  if (ids.size) {
+    const ref = /url\\(\\s*["']?#([^"')\\s]+)["']?\\s*\\)/g;
+    for (const svg of figure.querySelectorAll("svg"))
+      for (const e of svg.querySelectorAll("*"))
+        for (const a of e.attributes) {
+          const v = a.value;
+          if (v.includes("url(")) {
+            const next = v.replace(ref, (m, id) => (ids.has(id) ? \`url(#\${ids.get(id)})\` : m));
+            if (next !== v) a.value = next;
+          } else if ((a.localName === "href") && v[0] === "#" && ids.has(v.slice(1))) a.value = \`#\${ids.get(v.slice(1))}\`;
+        }
+  }
+  for (const e of figure.querySelectorAll("[id]")) e.removeAttribute("id");
+  const main = oldHost.parentElement;
+  if (getComputedStyle(main).position === "static") main.style.position = "relative";
+  const box = figure.getBoundingClientRect();
+  const at = main.getBoundingClientRect();
+  Object.assign(figure.style, { position: "absolute", left: \`\${box.left - at.left}px\`, top: \`\${box.top - at.top}px\`, width: \`\${box.width}px\`, height: \`\${box.height}px\`, margin: "0", zIndex: "3", pointerEvents: "none" });
+  figure.inert = true;
+  figure.setAttribute("aria-hidden", "true");
+};
+const said = document.getElementById("site-theme-said");
+const radios = [...document.querySelectorAll('input[name="a3-theme"]')];
+const syncRadios = () => {
+  for (const r of radios) r.checked = r.value === S.pref;
+};
+let busy = false;
+async function apply(announce) {
+  syncRadios();
+  const t = want();
+  if (busy || t === current) return;
+  busy = true;
+  try {
+    const theme = await themeOf(t);
+    if (want() === t) {
+      const old = fig;
+      const oldHost = host;
+      const carry = old.snapshot();
+      old.stop();
+      const unpin = pinPage();
+      freeze(oldHost);
+      const fresh = template.cloneNode(true);
+      fresh.setAttribute("data-theme", t);
+      oldHost.before(fresh);
+      host = fresh;
+      try {
+        fig = window.__a380Figure = await RT.boot(theme, carry);
+        current = t;
+      } finally {
+        document.body.setAttribute("data-theme", t);
+        unpin();
+        setMeta(t);
+        oldHost.remove();
+        old.release();
+      }
+      if (announce && said) said.textContent = \`\${t === "light" ? "Light" : "Dark"} theme\${S.pref === "system" ? " (system)" : ""}\`;
+    }
+  } catch (e) {
+    // (a theme that cannot load is not retried in a loop: the switch shows the theme that is on screen)
+    console.error(e);
+    busy = false;
+    S.pref = current;
+    syncRadios();
+    return;
+  }
+  busy = false;
+  if (want() !== current) apply(announce);
+}
+for (const r of radios)
+  r.addEventListener("change", () => {
+    if (!r.checked) return;
+    S.pref = r.value;
+    try {
+      localStorage.setItem(KEY, S.pref);
+    } catch (_) {}
+    apply(true);
+  });
+mq.addEventListener("change", () => {
+  if (S.pref === "system") apply(true);
+});
+syncRadios();
+// the other theme at idle after first light (the GL programs compiled, the cross-fade done), so a switch is near-instant
+const other = () => (current === "light" ? "dark" : "light");
+const idle = window.requestIdleCallback ?? ((fn) => setTimeout(fn, 200));
+const prefetch = () =>
+  idle(() => {
+    import(new URL(ASSETS[other()].js, document.baseURI).href).catch(() => {});
+    payloadText(other()).catch(() => {});
+  });
+(function wait(n) {
+  const A = window.__a380;
+  const g = A && A.glInfo;
+  if (n > 120 || !g || (g.pending === 0 && (!g.ok || A.pv.glShare >= 0.999))) prefetch();
+  else setTimeout(() => wait(n + 1), 250);
+})(0);
+if (want() !== current) apply(false);`;
+// index.html: the figure page (the dark build's markup, which is the light build's apart from the theme attributes)
+// with the site layer, its scripts replaced by the runtime, the theme picked in <head> and the switch
 const unescape = (s) => s.replace(/&quot;/g, '"').replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&");
-const sitePage = (theme) => {
-  const og = theme === "light" ? A.ogLight : A.ogDark;
-  let text = html[theme];
+{
+  let text = split.dark.before;
   const headPart = text.slice(0, text.indexOf("</head>"));
   const own = (name) => new RegExp(`<meta name="${name}"`).test(headPart);
   const description = unescape(/<meta name="description" content="([^"]*)"/.exec(headPart)?.[1] ?? DESCRIPTION);
-  const tags = head({ path: NAMES[theme], theme, description })
+  const tags = head({ path: "index.html", theme: "dark", description })
     .split(/(?=<meta |<link )/)
     .filter((tag) => !["description", "color-scheme", "theme-color"].some((name) => tag.startsWith(`<meta name="${name}"`) && own(name)))
     .join("");
-  const n = text.length;
-  text = text.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(TITLE)}</title>${tags}<style id="site-css">${SITE_CSS}</style><script>${SITE_JS}</script>`);
-  const m = text.length;
-  text = text.replace('<main class="iso-page">', () => `<main class="iso-page">${NOTES(og)}`);
-  const k = text.length;
-  if (text.split("</main>").length !== 2) fail(`the ${theme} page has not exactly one </main>`);
-  text = text.replace("</main>", () => `${NOGL}${bar(theme)}</main>`);
-  if (m === n || k === m || text.length === k) fail(`could not place the site layer in the ${theme} page`);
-  return text;
-};
-files.set(NAMES.dark, Buffer.from(sitePage("dark")));
-files.set(NAMES.light, Buffer.from(sitePage("light")));
+  const steps = [
+    [/<title>[^<]*<\/title>/, () => `<title>${esc(TITLE)}</title>${tags}<script>${PICK}</script><link rel="modulepreload" href="${RUNTIME}"><style id="site-css">${SITE_CSS}</style><script>${SITE_JS}</script>`],
+    ['<body class="iso" data-theme="dark">', () => `<body class="iso" data-theme="dark">${PAINT}`],
+    ['<main class="iso-page">', () => `<main class="iso-page">${NOTES(A.ogDark)}`],
+    ['<figure class="iso-figure">', () => `<div class="iso a3-theme-host" data-theme="dark"><script>document.currentScript.parentNode.setAttribute("data-theme",window.__a3site?__a3site.theme:"dark")</script><figure class="iso-figure">`],
+    ["</figure></main>", () => `</figure></div>${NOGL}${bar()}</main>`],
+  ];
+  for (const [find, put] of steps) {
+    const next = text.replace(find, put);
+    if (next === text || text.split(find).length > 2) fail(`could not place the site layer at ${find}`);
+    text = next;
+  }
+  text += `<script>${split.dark.stamp}</script><script type="module" src="${RUNTIME}"></script><script type="module">${BOOT}</script>${split.dark.after}`;
+  files.set("index.html", Buffer.from(text));
+}
 
 // the plain pages (index, credits, 404): the page colours of the figure's themes, the stored choice or the system's
 const shell = ({ path, title, body, script = "", description = DESCRIPTION, base = "" }) =>
@@ -377,27 +594,8 @@ pre{white-space:pre-wrap;font:12.5px/1.55 ui-monospace,"SF Mono",Menlo,Consolas,
 ul{padding-left:20px}li{margin:6px 0;overflow-wrap:anywhere}.pick{display:flex;gap:12px;flex-wrap:wrap;margin:20px 0}
 .pick a{display:inline-block;padding:10px 14px;border-radius:8px;box-shadow:0 0 0 1px var(--line);background:var(--card);color:var(--strong);text-decoration:none}
 </style></head><body><main>${body}</main></body></html>`;
-// index.html: the stored choice (or ?theme=), else prefers-color-scheme; it replaces itself with that page at once
-const PICK = `(function(){var K="a380-theme",t=null,q=/[?&]theme=(dark|light)\\b/.exec(location.search);
-try{t=q?q[1]:localStorage.getItem(K);if(q)localStorage.setItem(K,q[1])}catch(_){}
-if(t!=="dark"&&t!=="light")t=window.matchMedia&&matchMedia("(prefers-color-scheme: light)").matches?"light":"dark";
-document.documentElement.setAttribute("data-theme",t);
-var s=location.search.replace(/([?&])theme=[^&]*(&|$)/,"$1").replace(/[?&]$/,"");
-location.replace((t==="light"?"${NAMES.light}":"${NAMES.dark}")+s+location.hash)})();`;
+// credits and 404 take the stored theme (System, or none: the system's)
 const THEME_ATTR = `(function(){try{var t=localStorage.getItem("a380-theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t)}catch(_){}})();`;
-const REMEMBER = `<script>document.addEventListener("click",function(e){var a=e.target.closest&&e.target.closest("[data-theme-to]");if(a)try{localStorage.setItem("a380-theme",a.getAttribute("data-theme-to"))}catch(_){}})</script>`;
-files.set(
-  "index.html",
-  Buffer.from(
-    shell({
-      path: "index.html",
-      title: TITLE,
-      script: PICK,
-      body: `<h1>Airbus A380-800</h1><p>${esc(DESCRIPTION)}</p><div class="pick"><a href="${NAMES.dark}" data-theme-to="dark">Open the night figure (dark)</a><a href="${NAMES.light}" data-theme-to="light">Open the day figure (light)</a></div><noscript><p class="card"><strong>The figure needs JavaScript.</strong> It is an interactive drawing; with JavaScript off, here is a still of it at take-off.</p><picture><source srcset="${A.ogLight}" media="(prefers-color-scheme: light)"><img src="${A.ogDark}" alt="${esc(ALT)}" width="1200" height="630"></picture></noscript><p class="muted"><a href="credits.html">Credits and licence</a></p>${REMEMBER}`,
-    }),
-  ),
-);
-
 // credits.html: the not-affiliated notice, the kit's MIT licence and the sources (truth.md §1)
 const truth = readFileSync(join(A380, "truth.md"), "utf8");
 const sourceRows = (truth.split(/^## 1\. Sources/m)[1] ?? "").split(/^## /m)[0].split("\n").filter((l) => /^\| [A-Z]+ \|/.test(l));
@@ -443,7 +641,7 @@ files.set("robots.txt", Buffer.from(`User-agent: *\nAllow: /\n${URL_BASE ? `\nSi
 if (URL_BASE)
   files.set(
     "sitemap.xml",
-    Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${["", NAMES.dark, NAMES.light, "credits.html"].map((p) => `  <url><loc>${esc(URL_BASE + p)}</loc></url>`).join("\n")}\n</urlset>\n`),
+    Buffer.from(`<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${["", "credits.html"].map((p) => `  <url><loc>${esc(URL_BASE + p)}</loc></url>`).join("\n")}\n</urlset>\n`),
   );
 // headers for the hosts that read them (Cloudflare Pages and Netlify: _headers; Vercel: vercel.json); site/DEPLOY.md.
 // The paths are relative to the deployed folder's root: under a subpath, prefix them (DEPLOY.md)

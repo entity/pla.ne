@@ -50,6 +50,7 @@ Fractions are 0..1 across the element.
                                           time (0.05 = 20x slow motion) so sheets catch 100 ms events; ["slow", 1] restores it
   ["until", js, timeoutMs?]               poll a JS expression until it is truthy (default 10 s), e.g. a readout reaching a phase
   ["eval", js]                            run JS in the page and print the result
+  ["media", feature, value]               emulate a media feature from now on, e.g. ["media", "prefers-color-scheme", "light"]
   ["save", file, js]                      run JS in the page and write its value to a file (a string as is, else JSON)
   ["shot", out.png, sel?, scale?, [x,y,w,h]?]           screenshot an element, or a region of it in CSS px
   ["lines", out.png?, sel?, options?]     check every texture line's two ends: each must land on a stroke, a dot or an outline
@@ -304,6 +305,15 @@ async function main() {
         await send("Input.dispatchKeyEvent", { type: "keyDown", key, code, text: key.length === 1 ? key : undefined, windowsVirtualKeyCode: key === " " ? 32 : 0 });
         await send("Input.dispatchKeyEvent", { type: "keyUp", key, code });
       } else if (kind === "eval") console.log("eval:", JSON.stringify(await evaluate(args[0])));
+      // ["media", "prefers-color-scheme", "light"]: emulate a media feature from now on (the system changing its scheme
+      // while the page is open); the --reduced and --theme features stay unless named again
+      else if (kind === "media") {
+        const kept = features.filter((f) => f.name !== args[0]);
+        features.length = 0;
+        features.push(...kept, { name: args[0], value: args[1] });
+        await send("Emulation.setEmulatedMedia", { features });
+        console.log(`media: ${args[0]} ${args[1]}`);
+      }
       // ["save", file, js]: write the expression's value to a file (a string as is, anything else as JSON)
       else if (kind === "save") {
         const v = await evaluate(args[1]);

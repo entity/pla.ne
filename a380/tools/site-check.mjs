@@ -6,14 +6,15 @@
 //   node a380/tools/site-check.mjs --nojs http://127.0.0.1:8741/a380/ --out a380/tmp/site-work
 //   node a380/tools/site-check.mjs --layout http://127.0.0.1:8741/a380/ [--out a380/tmp/site-work]
 //
-// Layout (fu/f4-hosting): both figure pages at 320 × 568, 390 × 844 and 844 × 390 (touch, mobile) and 1280 × 800 and
-// 1440 × 900 (mouse): every site-bar link lies on the page (top ≥ 0), is inside the viewport once scrolled to, and is
+// Layout (fu/f4-hosting; the theme switch): the single page in each theme (?theme=dark, ?theme=light) at 320 × 568, 390 × 844 and 844 × 390 (touch, mobile) and 1280 × 800 and
+// 1440 × 900 (mouse): the page, the figure and the switch carry that theme; every site-bar target (the System, Light
+// and Dark choices and the Credits link) lies on the page (top ≥ 0), is inside the viewport once scrolled to, and is
 // the element at its own centre; touch links are at least 44 px tall; the card (.iso-plate) is not moved by the site
 // layer (its rect equals the one with the layer removed) and, with the no-WebGL note shown, the card still ends where
 // it ended without it. Exits 1 on any failure. --nojs also checks that the Credits link can be reached.
 //
 // Timing: each run is a fresh Chrome profile with the cache disabled, navigating to the URL given (index.html follows
-// its theme pick with location.replace, which is counted). Times are from the navigation request: the HTML received,
+// index.html is the figure itself, its theme picked in <head>). Times are from the navigation request: the HTML received,
 // DOMContentLoaded, first contentful paint, the figure mounted (window.__a380.controller), and first light: every WebGL
 // program linked and GL faded in (glShare ≥ 0.999), the moment the page's lights are whole (the measure turn-check
 // reports as "GL ready … after the mount"). Profiles:
@@ -186,7 +187,7 @@ const MEASURE = `(async () => {
   const out = { inner: [innerWidth, innerHeight], coarse: matchMedia('(any-pointer: coarse)').matches, links: [] };
   scrollTo(0, 0); await frame();
   out.plate = R(plate);
-  for (const a of document.querySelectorAll('.site-bar a')) {
+  for (const a of document.querySelectorAll('.site-bar a, .site-theme label')) {
     const page = R(a);
     a.scrollIntoView({ block: 'center' }); await frame();
     const r = a.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
@@ -206,7 +207,8 @@ const MEASURE = `(async () => {
 async function layout(url, out) {
   mkdirSync(out, { recursive: true });
   const base = url.replace(/[^/]*$/, "");
-  for (const page of ["a380.html", "a380-light.html"])
+  // the single page in each theme (the theme switch: ?theme= picks and stores it)
+  for (const page of ["?theme=dark", "?theme=light"])
     for (const [name, width, height, touch] of VIEWPORTS) {
       const b = await open();
       await b.send("Emulation.setDeviceMetricsOverride", { width, height, deviceScaleFactor: touch ? 3 : 1, mobile: touch });
@@ -226,7 +228,10 @@ async function layout(url, out) {
       await new Promise((d) => setTimeout(d, 600));
       const m = JSON.parse(await b.evaluate(MEASURE));
       const bad = [];
-      if (m.links.length !== 3) bad.push(`${m.links.length} site-bar links, not 3`);
+      if (m.links.length !== 4) bad.push(`${m.links.length} site-bar targets, not 4 (System, Light, Dark, Credits)`);
+      const want = page.split("=")[1];
+      const themes = await b.evaluate("document.body.dataset.theme + ' ' + document.querySelector('.a3-theme-host').dataset.theme + ' ' + (document.querySelector('input[name=a3-theme]:checked') || {}).value");
+      if (themes !== `${want} ${want} ${want}`) bad.push(`theme: page, figure and switch read ${themes}, not ${want}`);
       for (const l of m.links) {
         if (l.page.y < 0) bad.push(`${l.text} above the page (top ${l.page.y})`);
         if (!l.inView) bad.push(`${l.text} not inside the viewport when scrolled to (at ${l.rect.join(',')} scrolled ${l.scroll})`);
@@ -238,7 +243,7 @@ async function layout(url, out) {
       if (!same(m.plate, m.plateBare)) bad.push(`the site layer moves the card: ${JSON.stringify(m.plate)} against ${JSON.stringify(m.plateBare)} without it`);
       if (!same(m.plateNogl, m.plate)) bad.push(`the no-WebGL note moves the card: ${JSON.stringify(m.plateNogl)} against ${JSON.stringify(m.plate)}`);
       const shot = await b.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: true, clip: { x: 0, y: 0, width, height: Math.min(4000, Math.max(height, m.links.reduce((y, l) => Math.max(y, l.page.b), 0) + 24)), scale: 1 } });
-      const file = join(out, `layout-${page.replace(".html", "")}-${name}.png`);
+      const file = join(out, `layout-${page.split("=")[1]}-${name}.png`);
       writeFileSync(file, Buffer.from(shot.result.data, "base64"));
       if (b.problems.length) bad.push(...b.problems);
       console.log(`${where}: plate ${m.plate.x},${m.plate.y} ${m.plate.w}x${m.plate.h} (bottom ${m.plate.b} of ${height}) · links ${m.links.map((l) => `${l.text}@${l.page.x},${l.page.y} ${l.page.w}x${l.h}${l.inView && l.hit ? "" : " (!)"}`).join(", ")} · no-WebGL note at ${m.nogl.y}..${m.nogl.b} · ${bad.length ? "FAIL: " + bad.join("; ") : "ok"} · ${file}`);
@@ -250,7 +255,7 @@ async function layout(url, out) {
 async function nojs(url, out) {
   mkdirSync(out, { recursive: true });
   const base = url.replace(/[^/]*$/, "");
-  for (const [name, path, width] of [["index", "", 1440], ["dark", "a380.html", 1440], ["light", "a380-light.html", 390]]) {
+  for (const [name, path, width] of [["index", "", 1440], ["phone", "", 390]]) {
     const b = await open();
     await b.send("Emulation.setDeviceMetricsOverride", { width, height: 1000, deviceScaleFactor: 1, mobile: width < 600 });
     await b.send("Emulation.setScriptExecutionDisabled", { value: true });
