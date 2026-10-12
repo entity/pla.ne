@@ -26,10 +26,13 @@ const { f, v3 } = glsl;
  *       runway-end lights across the runway at the threshold, which the page passes in uThr.x)
  * window: [r0, r1] platter radius (units) where the pixel window falls from 1 to 0; lightWindow: same, per light.
  */
+// Both themes' rules are in the one source (perf/gl-light-uniforms), chosen by uLight (fixed per page): the dark glow
+// and the daylight paper ink. The source is then the same in both themes, so after a theme switch the browser's shader
+// cache links the program again at once (`theme` is kept for callers and no longer changes the GLSL).
 export function runwayFragment({ rows, bar, repeat, window, lightWindow, theme = "dark" }) {
-  const paperInk = theme === "light";
-  const rowCode = rows.map((R, i) => rowAlong(R, i, repeat, lightWindow, paperInk)).join("\n");
-  const barCode = bar ? rowAcross(bar, paperInk) : "";
+  void theme;
+  const rowCode = rows.map((R, i) => rowAlong(R, i, repeat, lightWindow)).join("\n");
+  const barCode = bar ? rowAcross(bar) : "";
   return `${GLSL_COMMON}
 ${glslPose("Air")}
 uniform vec3 uScroll;   // per set (stand, taxi, runway): scroll along platter +x, units, in [0, repeat)
@@ -62,14 +65,15 @@ void main(){
   if(win<=0.||uLevel<=0.){gl_FragColor=vec4(0.);return;}
   vec2 va=uThr.zw;
   float bidir=mix(.35,1.,smoothstep(.15,.85,abs(va.x)));   // inset lights beam along the runway, both ways
-  ${paperInk ? "vec4 paper=vec4(0.);" : "vec3 glow=vec3(0.);"}
+  bool paperInk=uLight>.5;
+  vec4 paper=vec4(0.);vec3 glow=vec3(0.);
   // the platter frame on screen: project(fromAir(p)) = PO + p.x PX + p.y PY + p.z PZ (affine), shared by every row
   vec2 PO=uAxO.xy;vec2 PX=uAxO.zw;vec2 PY=uAxYZ.xy;vec2 PZ=uAxYZ.zw;
   float lX=length(PX);vec2 hX=PX/lX;
 ${rowCode}
 ${barCode}
-  ${paperInk ? "if(paper.a<=0.){gl_FragColor=vec4(0.);return;}" : "if(glow.r+glow.g+glow.b<=0.){gl_FragColor=vec4(0.);return;}"}   // far from every light
-  vec4 ink=${paperInk ? "paper" : "glowOf(glow)"}*win*uLevel;
+  if(paperInk?paper.a<=0.:glow.r+glow.g+glow.b<=0.){gl_FragColor=vec4(0.);return;}   // far from every light
+  vec4 ink=(paperInk?paper:glowOf(glow))*win*uLevel;
   gl_FragColor=finish(ink*uFirst*edgeFade(vb));
 }`;
 }
@@ -80,7 +84,7 @@ const comp = (set) => ["x", "y", "z"][set];
 // Gaussians) and a coloured pool; paper (daylight rule): a glint with a small rim and a pale core, and no pavement tint
 // (review fu-1: a .05 tint still read as a pink stain 17 CSS px round each red light; a runway light does not tint the
 // pavement by day, webgl.md 8.3).
-function rowAlong(R, i, repeat, lightWindow, paperInk) {
+function rowAlong(R, i, repeat, lightWindow) {
   const c = comp(R.set);
   const s = R.set;
   const gate = R.range
@@ -94,19 +98,14 @@ function rowAlong(R, i, repeat, lightWindow, paperInk) {
   // (a colour may come as its ink uniform, follow-up item 35: the rim and core are then GLSL of it)
   const rim = typeof R.paper === "string" ? `(${R.paper}*.86)` : v3(R.paper.map((x) => x * 0.86));
   const core = typeof R.paper === "string" ? `mix(vec3(1.),${R.paper},.12)` : v3(R.paper.map((x) => 1 - 0.12 * (1 - x)));
-  const point = paperInk
-    ? `float rp=rl*1.6;
-    float eP=lens*1.2+core*2.4+exp(-r2/(rp*rp))*.5;`
-    : `float rh2=rh*rh;
-    float eP=lens*1.2+core*1.4+exp(-r2/rh2)*.55+exp(-r2/(rh2*4.))*.18;`;
-  const streak = paperInk
-    ? `eS=lensS*1.2+coreS*2.4+combStreak(u,lam,bl,rp)*exp(-pw*pw/(rp*rp))*.5;`
-    : `eS=lensS*1.2+coreS*1.4+combStreak(u,lam,bl,rh)*exp(-pw*pw/rh2)*.55+combStreak(u,lam,bl,rh*2.)*exp(-pw*pw/(rh2*4.))*.18;`;
-  const ink = paperInk
-    ? `vec4 lampP=lampInk(eP*g,${rim},${body},${core},.95)*lw;
+  const point = `float rp=rl*1.6;float rh2=rh*rh;
+    float eP=paperInk?lens*1.2+core*2.4+exp(-r2/(rp*rp))*.5:lens*1.2+core*1.4+exp(-r2/rh2)*.55+exp(-r2/(rh2*4.))*.18;`;
+  const streak = `eS=paperInk?lensS*1.2+coreS*2.4+combStreak(u,lam,bl,rp)*exp(-pw*pw/(rp*rp))*.5:lensS*1.2+coreS*1.4+combStreak(u,lam,bl,rh)*exp(-pw*pw/rh2)*.55+combStreak(u,lam,bl,rh*2.)*exp(-pw*pw/(rh2*4.))*.18;`;
+  const ink = `if(paperInk){
+    vec4 lampP=lampInk(eP*g,${rim},${body},${core},.95)*lw;
     vec4 lampS=ws>0.?lampInk(eS*g,${rim},${body},${core},.95)*gateS:vec4(0.);
-    paper=over(mix(lampP,lampS,ws)*w*wG,paper);`
-    : `glow+=${dark}*(mix(eP*lw,eS*gateS,ws)*g*wG+pl*.32)*w;`;
+    paper=over(mix(lampP,lampS,ws)*w*wG,paper);
+    }else glow+=${dark}*(mix(eP*lw,eS*gateS,ws)*g*wG+pl*.32)*w;`;
   return `  // row ${i}: set ${s}, y ${R.y}, pitch ${R.pitch}${R.inset ? ", inset bidirectional" : ", elevated"}
   if(uSetMix.${c}>0.){
     float s${i}=uScroll.${c};float dd=uStreak.${c};
@@ -159,26 +158,25 @@ function rowAlong(R, i, repeat, lightWindow, paperInk) {
 
 // The threshold (green toward the approach, -x) and runway-end (red toward the runway, +x) lights: one row
 // across the runway at the threshold, which moves with the runway set. Each light streaks on its own.
-function rowAcross(B, paperInk) {
+function rowAcross(B) {
   const c = comp(B.set);
   const n = B.count;
   const gD = v3(B.green.dark);
   const rD = v3(B.red.dark);
   const gP = v3(B.green.paper);
   const rP = v3(B.red.paper);
-  const point = paperInk ? `float rp=rl*1.6;float eP=lens*1.2+core*2.4+exp(-r2/(rp*rp))*.5;` : `float eP=lens*1.2+core*1.4+exp(-r2/(rh*rh))*.55+exp(-r2/(rh*rh*4.))*.18;`;
-  const streak = paperInk
-    ? `eS=segStreak(sp,len,sl)*exp(-pw*pw/(sl*sl))*1.2+segStreak(sp,len,sc)*exp(-pw*pw/(sc*sc))*2.4+segStreak(sp,len,rp)*exp(-pw*pw/(rp*rp))*.5;`
-    : `eS=segStreak(sp,len,sl)*exp(-pw*pw/(sl*sl))*1.2+segStreak(sp,len,sc)*exp(-pw*pw/(sc*sc))*1.4
+  const point = `float rp=rl*1.6;float eP=paperInk?lens*1.2+core*2.4+exp(-r2/(rp*rp))*.5:lens*1.2+core*1.4+exp(-r2/(rh*rh))*.55+exp(-r2/(rh*rh*4.))*.18;`;
+  const streak = `eS=paperInk?segStreak(sp,len,sl)*exp(-pw*pw/(sl*sl))*1.2+segStreak(sp,len,sc)*exp(-pw*pw/(sc*sc))*2.4+segStreak(sp,len,rp)*exp(-pw*pw/(rp*rp))*.5
+        :segStreak(sp,len,sl)*exp(-pw*pw/(sl*sl))*1.2+segStreak(sp,len,sc)*exp(-pw*pw/(sc*sc))*1.4
         +segStreak(sp,len,rh)*exp(-pw*pw/(rh*rh))*.55+segStreak(sp,len,rh*2.)*exp(-pw*pw/(rh*rh*4.))*.18;`;
   // each face has its own directional lobe and the two never overlap: side-on both fall to dark (review fu-1: one colour
   // mixed toward the other across 70° of bearings read olive, salmon or brown side-on); by day no pavement tint
-  const ink = paperInk
-    ? `vec3 pp=gW>rW?${gP}:${rP};
+  const ink = `if(paperInk){
+    vec3 pp=gW>rW?${gP}:${rP};
     vec4 lampP=lampInk(eP*g,pp*.86,pp,mix(vec3(1.),pp,.12),.95);
     vec4 lampS=ws>0.?lampInk(eS*g,pp*.86,pp,mix(vec3(1.),pp,.12),.95):vec4(0.);
-    paper=over(mix(lampP,lampS,ws)*w*wB,paper);`
-    : `glow+=(gW>rW?${gD}:${rD})*(mix(eP,eS,ws)*g+pl*.3)*w*wB;`;
+    paper=over(mix(lampP,lampS,ws)*w*wB,paper);
+    }else glow+=(gW>rW?${gD}:${rD})*(mix(eP,eS,ws)*g+pl*.3)*w*wB;`;
   return `  // threshold and runway-end lights across the runway at uThr.x
   if(uSetMix.${c}>0.&&uThr.y>0.){
     float tx=uThr.x;float dd=uStreak.${c};

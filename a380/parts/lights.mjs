@@ -622,22 +622,10 @@ void main(){
     const hexRgb = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
     page.winPaper = { rim: SH.GL_INKS.winRim.light, body: SH.GL_INKS.win.light, core: SH.GL_INKS.winCore.light, glass: hexRgb("#b9c3cc"), layers: { amber: hexRgb("#e1b162"), rim: P.rim.map((v) => Math.round(v * 255) / 255), core: P.core.map((v) => Math.round(v * 255) / 255) } };
   }
-  if (LIGHT_THEME) {
-    const VOLUMES_PAPER = `${COMMON}${glslPose("Plane")}${proxyGlsl(px)}${hazeGlsl}
-uniform vec4 uHaze;
-uniform float uApu;
-void main(){
-  vec2 vb=viewOf(gl_FragCoord.xy);
-  vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(towardViewer()));
-  float tAir=airT(o,d);
-  float hz=${hazeSum("1.")};
-  if(hz<=0.){gl_FragColor=vec4(0.);return;}
-  gl_FragColor=finish(${hazePaper("hz")}*uFirst*edgeFade(vb)*frameFade());
-}`;
-    ctx.glEffect({ id: "volumes", canvas: "air", fragment: VOLUMES_PAPER, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uHaze", "uApu", "uFrame", "uFirst", "uNoDither"] });
-  }
-  if (!LIGHT_THEME) {
-    const VOLUMES = `${COMMON}${glslPose("Plane")}${proxyGlsl(px)}${hazeGlsl}${SH.glslLamps(N_LAMPS)}
+  // one source for both themes (perf/gl-light-uniforms), the rule chosen by uLight (fixed per page): by daylight the
+  // haze alone, as a paper tint; at night the beams' front halves and the haze, as glow. The same source in both themes
+  // lets the browser's shader cache link it again at once after a theme switch
+  const VOLUMES = `${COMMON}${glslPose("Plane")}${proxyGlsl(px)}${hazeGlsl}${SH.glslLamps(N_LAMPS)}
 uniform vec4 uHaze;
 uniform float uApu;
 uniform float uSteps;
@@ -646,13 +634,18 @@ void main(){
   vec3 p0=rayOf(vb)*${f(KM)};vec3 V=towardViewer();
   vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(V));
   float tAir=airT(o,d);
+  if(uLight>.5){
+    float hz=${hazeSum("1.")};
+    if(hz<=0.){gl_FragColor=vec4(0.);return;}
+    gl_FragColor=finish(${hazePaper("hz")}*uFirst*edgeFade(vb)*frameFade());
+    return;
+  }
   float air=beams(p0,V,tAir,1.,uSteps);
   float hz=${hazeSum("1.")};
   vec4 ink=glowOf(${SH.inkU("beam")}*air*.9+${SH.inkU("haze")}*.1*(1.-exp(-hz*3.)));
   gl_FragColor=finish(ink*uFirst*edgeFade(vb)*frameFade());
 }`;
-    ctx.glEffect({ id: "volumes", canvas: "air", fragment: VOLUMES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uLS", "uLD", "uLC", "uHaze", "uApu", "uSteps", "uFrame", "uFirst", "uNoDither"] });
-  }
+  ctx.glEffect({ id: "volumes", canvas: "air", fragment: VOLUMES, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uLS", "uLD", "uLC", "uHaze", "uApu", "uSteps", "uFrame", "uFirst", "uNoDither"] });
 
   // ---- ground: pools (platter-windowed), and in dark the beacon and strobe washes and the back halves
   // the pools fade to 0 over the last 1.4 m inside the platter (36.6-38.0 m), not in a rim-hugging 0.8 m: a pool that
@@ -672,18 +665,21 @@ void main(){
   float plat=1.-smoothstep(${f(w0)},${f(w1)},length(g.xy));
   // every ground-lit term fades with the true height (uWashH): the ground is far below once airborne
   float pool=lampPools(g)*plat*uWashH;
-  ${
-    LIGHT_THEME
-      ? `vec4 ink=tintInk(pool*.9,${SH.inkU("pool")},.06);` + // daylight: a floodlight pool on concrete barely shows
-        // fu/r2-lights: the back half of the daylight heat haze, inside its own box (as the dark page's back halves)
-        `
+  // (one source for both themes, perf/gl-light-uniforms: the daylight rule under uLight, then the night's)
+  if(uLight>.5){
+  // daylight: a floodlight pool on concrete barely shows
+  vec4 ink=tintInk(pool*.9,${SH.inkU("pool")},.06);
+  // fu/r2-lights: the back half of the daylight heat haze, inside its own box (as the dark page's back halves)
   if((uHaze.x+uHaze.y+uHaze.z+uHaze.w+uApu>0.)&&vb.x>uVolBox.x&&vb.y>uVolBox.y&&vb.x<uVolBox.z&&vb.y<uVolBox.w){
     vec3 o=toPlane(rayOf(vb))*${f(KM)};vec3 d=normalize(dirToPlane(towardViewer()));
     float tAir=airT(o,d);
     float hz=${hazeSum("0.")};
     if(hz>0.)ink=over(${hazePaper("hz")}*frameFade(),ink);
-  }`
-      : `vec3 Lb=uBeacon.xyz*${f(KM)}-g;float lb=dot(Lb,Lb);
+  }
+  gl_FragColor=finish(ink*uFirst*edgeFade(vb));
+  return;
+  }
+  vec3 Lb=uBeacon.xyz*${f(KM)}-g;float lb=dot(Lb,Lb);
   // the lower beacon's pool: a red tint on the pavement, below the lamp pools (review fu-1: 90/(d²+1) clipped to R 247
   // under the belly, the loudest thing on the platter once a second); a wide soft law, peak about R 120 under the lens
   float rb=sqrt(lb);
@@ -702,8 +698,7 @@ void main(){
   float hz=vol?${hazeSum("0.")}:0.;
   // the back halves of the beams and the haze fade toward the card's frame over 40 CSS px (follow-up item 24); the pools
   // lie on the platter, inside it
-  vec4 ink=glowOf(${SH.inkU("pool")}*pool+${SH.inkU("beacon")}*beacon+${SH.inkU("strobe")}*flash+(${SH.inkU("beam")}*air*.9+${SH.inkU("haze")}*.1*(1.-exp(-hz*3.)))*frameFade());`
-  }
+  vec4 ink=glowOf(${SH.inkU("pool")}*pool+${SH.inkU("beacon")}*beacon+${SH.inkU("strobe")}*flash+(${SH.inkU("beam")}*air*.9+${SH.inkU("haze")}*.1*(1.-exp(-hz*3.)))*frameFade());
   gl_FragColor=finish(ink*uFirst*edgeFade(vb));
 }`;
   ctx.glEffect({ id: "ground", canvas: "ground", fragment: GROUND, uniforms: ["uPlaneX", "uPlaneY", "uPlaneZ", "uPlaneT", "uLS", "uLD", "uLC", "uBeacon", "uVolBox", "uStrobe", "uHaze", "uApu", "uSteps", "uWashH", "uFrame", "uFirst", "uNoDither"] });
