@@ -42,5 +42,9 @@ The audits and browser checks (headless Chromium) are described in [`a380/README
   turn runtime and the WebGL painter (MIT, see `kit/LICENSE`).
 - `scripts/`: headless-browser capture, drive and check scripts from the same skill.
 
+## Licence
+
+MIT, see [`LICENSE`](LICENSE). The drawing kit in `kit/` keeps its own MIT licence (`kit/LICENSE`).
+
 Not affiliated with or endorsed by Airbus. Dimensions and procedures come from public Airbus and EASA documents;
 values marked as estimates in `a380/truth.md` are estimates.
