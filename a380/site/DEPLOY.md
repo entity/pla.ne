@@ -69,6 +69,11 @@ Or as Workers static assets, with no Worker code (how https://air.pla.ne/ is ser
 `"routes": [{ "pattern": "your.domain", "custom_domain": true }]`, then `npx wrangler deploy`. `_headers` is read the
 same way, and the build's `.assetsignore` keeps `.build-site`, `.nojekyll` and `vercel.json` out of the upload.
 
+`.github/workflows/deploy.yml` runs `npm run deploy` on every push to `main` (and on demand) once the repository has
+the secrets `CLOUDFLARE_API_TOKEN` (a token with Workers Scripts and Workers Routes edit and Zone read) and
+`CLOUDFLARE_ACCOUNT_ID`; without them it does nothing. The runner has no GPU, so the card images are captured on
+SwiftShader (`DRIVE_ANGLE=swiftshader`): about 2.5 minutes, and the build warns that it did.
+
 ## Netlify
 
 1. Drag `a380/dist` onto app.netlify.com/drop, or `npx netlify-cli deploy --dir a380/dist --prod`.
